@@ -9,6 +9,7 @@ import time
 import random
 import socket
 from base64 import b64encode
+from copy import deepcopy
 
 # VERSION: 17
 
@@ -30,6 +31,10 @@ the resource information. The wrapper performs the following actions:
 6. Replaces the values of _replace_with_<parameter-section>.<parameter-name> with the corresponding value
 7. Sets the variable submit_cmd to sbatch or qsub if jobscheduler type is SLURM or PBS, respectively. If
    qos is present in the inputs dict it sets submit_cmd to sbatch --qos <qos>
+8. Some parameters have different items (like default value, help, type) depending on other parameters. For,
+   example, parameter p1 may have a different default value if the resource is onprem or cloud. The form does
+   not support this type of logic so instead we define a parameter p1____onprem and p1____cloud. The resource
+   wrapper removes everything after ____ and renames the parameter to p1.
 
 
 ### Workflow XML
@@ -774,10 +779,31 @@ def prepare_resource(inputs_dict, resource_label):
         logger.warning('SSH reverse tunnel is not working. Attempting to re-establish tunnel...')
         create_reverse_ssh_tunnel(ip_address, ssh_port)
 
+def clean_inputs(inputs_dict):
+    """
+    Some parameters have different items (like default value, help, type) depending on other parameters. For,
+    example, parameter p1 may have a different default value if the resource is onprem or cloud. The form does
+    not support this type of logic so instead we define a parameter p1____onprem and p1____cloud. The resource
+    wrapper removes everything after ____ and renames the parameter to p1.
+    """
+    new_inputs_dict = deepcopy(inputs_dict)
+
+    for ik,iv in inputs_dict.items():
+        if '____' in ik:
+            del new_inputs_dict[ik]
+            new_ik = ik.split('____')[0]
+            if type(iv) == dict:
+                new_inputs_dict[new_ik] = clean_inputs(iv)
+            else:
+                new_inputs_dict[new_ik] = iv
+
+    return new_inputs_dict
 
 if __name__ == '__main__':
     with open('inputs.json') as inputs_json:
         inputs_dict = json.load(inputs_json)
+
+    inputs_dict = clean_inputs(inputs_dict)
 
     # Add basic job info to inputs_dict:
     inputs_dict['job_number'] = os.path.basename(os.getcwd())
