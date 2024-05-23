@@ -234,7 +234,7 @@ def get_resource_info(resource_id):
         if type(resource['id']) == str:
             if resource['type'] in SUPPORTED_RESOURCE_TYPES:
                 if resource['id'].lower().replace('_', '') == resource_id.lower().replace('_', ''):
-                    if resource['status'] != 'on':
+                    if resource['status'] != 'on' and not resource.get('connected', False):
                        raise(Exception(f'Resource {resource_id} status is not on. Exiting.'))
                     return resource
     raise (Exception(
