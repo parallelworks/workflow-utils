@@ -4,12 +4,27 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import time
 import os
+import subprocess
 
 """
 This script monitors CPU and memory usage over time and provides options to either write the data to a text file or plot it. 
 If '--write-usage' option is provided, it continuously monitors CPU and memory usage and writes the data to the specified text file.
 If '--plot-usage' option is provided, it reads CPU and memory usage data from the specified text file and plots it over time.
 """
+
+def kill_job():
+    try:
+        with open("job_id.submitted", "r") as file:
+            job_id = file.readline().strip()
+            if job_id:
+                subprocess.run(["scancel", job_id], check=True)
+                print(f"Job {job_id} cancelled successfully.")
+            else:
+                print("No job ID found in job_id.submitted.")
+    except FileNotFoundError:
+        print("File job_id.submitted not found.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to cancel job {job_id}. Error: {e}")
 
 def get_usage():
     cpu_percent = psutil.cpu_percent()
@@ -22,6 +37,8 @@ def write_usage_data(txt_file):
         while True:
             timestamp = datetime.now()
             cpu_usage, memory_usage = get_usage()
+            if memory_usage > 98:
+                kill_job()
 
             # Write data to file
             data_file.write(f"{timestamp},{cpu_usage},{memory_usage}\n")
