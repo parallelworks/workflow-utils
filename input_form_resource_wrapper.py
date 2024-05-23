@@ -33,8 +33,8 @@ the resource information. The wrapper performs the following actions:
    qos is present in the inputs dict it sets submit_cmd to sbatch --qos <qos>
 8. Some parameters have different items (like default value, help, type) depending on other parameters. For,
    example, parameter p1 may have a different default value if the resource is onprem or cloud. The form does
-   not support this type of logic so instead we define a parameter p1____onprem and p1____cloud. The resource
-   wrapper removes everything after ____ and renames the parameter to p1.
+   not support this type of logic so instead we define a parameter p1@____onprem and p1@____cloud. The resource
+   wrapper removes everything after @____ and renames the parameter to p1.
 
 
 ### Workflow XML
@@ -783,15 +783,15 @@ def clean_inputs(inputs_dict):
     """
     Some parameters have different items (like default value, help, type) depending on other parameters. For,
     example, parameter p1 may have a different default value if the resource is onprem or cloud. The form does
-    not support this type of logic so instead we define a parameter p1____onprem and p1____cloud. The resource
-    wrapper removes everything after ____ and renames the parameter to p1.
+    not support this type of logic so instead we define a parameter p1@____onprem and p1@____cloud. The resource
+    wrapper removes everything after @____ and renames the parameter to p1.
     """
     new_inputs_dict = deepcopy(inputs_dict)
 
     for ik,iv in inputs_dict.items():
-        if '____' in ik:
+        if '@____' in ik:
             del new_inputs_dict[ik]
-            new_ik = ik.split('____')[0]
+            new_ik = ik.split('@____')[0]
             if type(iv) == dict:
                 new_inputs_dict[new_ik] = clean_inputs(iv)
             else:
