@@ -122,7 +122,7 @@ def encode_string_to_base64(text):
     return encoded_string
 
 RESOURCES_DIR: str = 'resources'
-SUPPORTED_RESOURCE_TYPES: list = ['gclusterv2', 'pclusterv2', 'azclusterv2', 'slurmshv2']
+SUPPORTED_RESOURCE_TYPES: list = ['gclusterv2', 'pclusterv2', 'azclusterv2', 'slurmshv2', 'existing']
 SSH_CMD: str = 'ssh  -o StrictHostKeyChecking=no'
 PW_PLATFORM_HOST: str = os.environ['PW_PLATFORM_HOST']
 HEADERS = {"Authorization": "Basic {}".format(encode_string_to_base64(os.environ['PW_API_KEY']))}
