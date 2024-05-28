@@ -792,10 +792,13 @@ def clean_inputs(inputs_dict):
         if '_tag_' in ik:
             del new_inputs_dict[ik]
             new_ik = ik.split('_tag_')[0]
-            if type(iv) == dict:
-                new_inputs_dict[new_ik] = clean_inputs(iv)
-            elif iv:
-                new_inputs_dict[new_ik] = iv
+        else:
+            new_ik = ik
+
+        if type(iv) == dict:
+            new_inputs_dict[new_ik] = clean_inputs(iv)
+        elif iv:
+            new_inputs_dict[new_ik] = iv
 
     return new_inputs_dict
 
