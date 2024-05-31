@@ -437,6 +437,9 @@ def replace_assigned_values(inputs_dict, inputs_dict_orig):
 
 
 def complete_resource_information(inputs_dict):
+
+    if 'workdir' in inputs_dict:
+        inputs_dict['resource']['workdir'] = inputs_dict['workdir']
     
     inputs_dict = replace_placeholders(
         inputs_dict, 
