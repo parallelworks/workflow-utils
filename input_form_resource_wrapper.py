@@ -11,8 +11,6 @@ import socket
 from base64 import b64encode
 from copy import deepcopy
 
-# VERSION: 17
-
 """
 # Form Resource Wrapper
 The code in this workflow is a wrapper to run before any other workflow in order to process and organize 
@@ -128,6 +126,7 @@ def encode_string_to_base64(text):
 
 RESOURCES_DIR: str = 'resources'
 SUPPORTED_RESOURCE_TYPES: list = ['gclusterv2', 'pclusterv2', 'azclusterv2', 'slurmshv2', 'existing']
+ONPREM_RESOURCE_TYPES: list = ['slurmshv2', 'existing']
 SSH_CMD: str = 'ssh  -o StrictHostKeyChecking=no'
 PW_PLATFORM_HOST: str = os.environ['PW_PLATFORM_HOST']
 HEADERS = {"Authorization": "Basic {}".format(encode_string_to_base64(os.environ['PW_API_KEY']))}
@@ -538,7 +537,7 @@ def complete_resource_information(inputs_dict):
     # If the OS of the SLURM partition is Windows we assume that the 
     # job directory is not shared. 
     if '_sch__dd_partition_e_' in inputs_dict:
-        if inputs_dict['resource']['type'] != 'slurmshv2':
+        if inputs_dict['resource']['type'] not in ONPREM_RESOURCE_TYPES:
             os_name=get_partition_os(inputs_dict['_sch__dd_partition_e_'], resource_info)
             if os_name == 'windows':
                 inputs_dict['resource']['jobdir'] = inputs_dict['resource']['workdir']
@@ -767,7 +766,7 @@ def prepare_resource(inputs_dict, resource_label):
     resource_inputs = complete_resource_information(resource_inputs)
     resource_inputs['resource']['label'] = resource_label
 
-    if resource_inputs['jobschedulertype'] == 'SLURM' and resource_inputs['resource']['type'] != 'slurmshv2':
+    if resource_inputs['jobschedulertype'] == 'SLURM' and resource_inputs['resource']['type'] not in ONPREM_RESOURCE_TYPES:
         check_slurm(resource_inputs['resource']['publicIp'])
 
     logger.info(json.dumps(resource_inputs, indent = 4))
