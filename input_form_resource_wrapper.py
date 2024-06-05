@@ -480,7 +480,6 @@ def complete_resource_information(inputs_dict):
         if inputs_dict['jobschedulertype'] == 'SLURM':
             if '_sch__dd_partition_e_' in inputs_dict:
                 command_to_obtain_cpus_per_node=f"{SSH_CMD} {public_ip} " + "sinfo -Nel | awk '/compute/ {print $5}' | tail -n1"
-                print(command_to_obtain_cpus_per_node)
                 inputs_dict['cpus_per_node'] = get_command_output(command_to_obtain_cpus_per_node)
 
             inputs_dict['submit_cmd'] = "sbatch"
