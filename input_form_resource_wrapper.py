@@ -8,7 +8,6 @@ import subprocess
 import time
 import random
 import socket
-import math
 from base64 import b64encode
 from copy import deepcopy
 
@@ -438,6 +437,14 @@ def replace_assigned_values(inputs_dict, inputs_dict_orig):
     return inputs_dict 
 
 
+def workers_per_node_to_tasks_per_node(max_workers_per_node, cpus_per_node):
+    truncated = cpus_per_node // max_workers_per_node
+    remainder = cpus_per_node % max_workers_per_node
+    if remainder < truncated:
+        return truncated
+    else:
+        return truncated + 1
+
 def complete_resource_information(inputs_dict):
 
     if 'workdir' in inputs_dict:
@@ -491,7 +498,7 @@ def complete_resource_information(inputs_dict):
 
             if 'cpus_per_node' in inputs_dict and 'max_workers_per_node' in inputs_dict:
                 max_workers_per_node = int(inputs_dict['max_workers_per_node'])
-                inputs_dict['_sch__dd_ntasks_d_per_d_node_e_'] = math.ceil(int(cpus_per_node)/max_workers_per_node)
+                inputs_dict['_sch__dd_ntasks_d_per_d_node_e_'] = workers_per_node_to_tasks_per_node(max_workers_per_node, cpus_per_node)
 
             inputs_dict['submit_cmd'] = "sbatch"
             if 'qos' in inputs_dict:
