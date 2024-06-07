@@ -652,8 +652,13 @@ def create_batch_header(inputs_dict, header_sh):
     else:
         return
     
+    if 'shebang' in inputs_dict:
+        shebang = inputs_dict['shebang']
+    else:
+        shebang = '#!/bin/bash'
+        
     with open(header_sh, 'w') as f:
-        f.write('#!/bin/bash\n')
+        f.write(shebang + '\n')
         for schd in scheduler_directives:
             if schd:
                 schd.replace('___',' ')
