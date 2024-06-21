@@ -383,7 +383,6 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
 
 
 def get_ssh_usercontainer_options(ssh_config_path, jobschedulertype, private_ip):
-
     if ssh_config_path == '~/.ssh/config':
         if jobschedulertype == 'CONTROLLER':
             return f'-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
@@ -542,7 +541,7 @@ def complete_resource_information(inputs_dict):
         # Some workflows always run a step in the controller
         if inputs_dict['jobschedulertype'] != 'CONTROLLER':
             inputs_dict['resource']['ssh_usercontainer_options_controller'] = get_ssh_usercontainer_options(
-                inputs_dict['resource']['ssh_config_path'],
+                inputs_dict['resource']['ssh_config_path_controller'],
                 'CONTROLLER', 
                 inputs_dict['resource']['privateIp']
             )
@@ -689,17 +688,14 @@ def create_resource_directory(resource_inputs, resource_label):
 
     create_batch_header(resource_inputs, header_sh)
 
-def is_ssh_tunnel_working(ip_address, ssh_usercontainer_options):
+def is_ssh_tunnel_working(ip_address, ssh_usercontainer_options_controller):
     # Define the SSH command 
-    ssh_command = f"ssh {ip_address} \"ssh {ssh_usercontainer_options} usercontainer hostname\""
-        
+    ssh_command = f"ssh {ip_address} \"ssh {ssh_usercontainer_options_controller} usercontainer hostname\""
     try:
         # Run the SSH command and capture the output
         output = subprocess.check_output(ssh_command, shell=True, text=True)
-        
         # Get the hostname of the local machine
         local_hostname = socket.gethostname()
-        
         # Compare the output and local hostname
         if output.strip() == local_hostname:
             return True
@@ -803,9 +799,9 @@ def prepare_resource(inputs_dict, resource_label):
     # FIXME Refactor
     ip_address = inputs_dict[f'pwrl_{label}']["resource"]["publicIp"]
     ssh_port = resource_inputs['resource']['ssh_usercontainer_port']
-    ssh_usercontainer_options = resource_inputs['resource']['ssh_usercontainer_options']
+    ssh_usercontainer_options_controller = resource_inputs['resource']['ssh_usercontainer_options_controller']
     
-    if not is_ssh_tunnel_working(ip_address, ssh_usercontainer_options):
+    if not is_ssh_tunnel_working(ip_address, ssh_usercontainer_options_controller):
         logger.warning('SSH reverse tunnel is not working. Attempting to re-establish tunnel...')
         create_reverse_ssh_tunnel(ip_address, ssh_port)
 
