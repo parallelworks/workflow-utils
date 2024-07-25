@@ -232,7 +232,7 @@ def get_resource_info(resource_id):
 
     url_resources = 'https://' + \
         PW_PLATFORM_HOST + \
-        "/api/compute/cluster"
+        "/api/compute/clusters"
 
     res = requests.get(url_resources, headers = HEADERS)
 
