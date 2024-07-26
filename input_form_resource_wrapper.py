@@ -763,7 +763,7 @@ def create_reverse_ssh_tunnel(ip_address, ssh_port):
         add_key_to_authorized_keys(ssh_public_key)
 
     try:
-        subprocess.run(f"ssh -f -N -T -oStrictHostKeyChecking=no -R localhost:{ssh_port}:localhost:22 {ip_address}", shell=True, check=True)
+        subprocess.run(f"ssh -f -N -T -oStrictHostKeyChecking=no  -o UserKnownHostsFile=/dev/null -R localhost:{ssh_port}:localhost:22 {ip_address}", shell=True, check=True)
     except:
         error_message = 'Tunnel retrying failed, exiting workflow'
         logger.error(error_message)
