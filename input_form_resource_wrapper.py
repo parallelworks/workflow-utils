@@ -402,7 +402,9 @@ def get_ssh_usercontainer_port(ssh_config_path, ip_address):
     # FIXME: Improve port parsing!
     command = f"{SSH_CMD} {ip_address} << EOF\ncat {ssh_config_path} | grep Port | awk \'{{print $2}}\'\nEOF"
     logger.info(f'Running command <{command}>')
-    ssh_port = get_command_output(command)
+    ssh_port_output = get_command_output(command)
+    # remove all non-numeric characters
+    ssh_port = ssh_port_output.translate({ord(c): None for c in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*()_+-=[]{}|;:,.<>?/\\'})
     
     if not ssh_port:
         error_message = f'Could not find ssh usercontainer port in {ssh_config_path} in {ip_address}'
