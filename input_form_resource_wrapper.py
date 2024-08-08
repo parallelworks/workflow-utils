@@ -401,6 +401,7 @@ def get_ssh_usercontainer_options(ssh_config_path, jobschedulertype, private_ip)
 def get_ssh_usercontainer_port(ssh_config_path, ip_address):
     # FIXME: Improve port parsing!
     command = f"{SSH_CMD} {ip_address} << EOF\ncat {ssh_config_path} | grep Port | awk \'{{print $2}}\'\nEOF"
+    logger.info(f'Running command <{command}>')
     ssh_port = get_command_output(command)
     
     if not ssh_port:
