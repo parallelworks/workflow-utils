@@ -367,9 +367,12 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
     
     # Create SSH config file
     logger.warning(f'SSH config file not found. Creating {ssh_config_path} ...')
+    # Copy utils/create_ssh_config.sh to the /tmp remote machine and run it
+    logger.info(f'Copying create_ssh_config.sh to {public_ip} ...')
+    subprocess.run(f'scp utils/create_ssh_config.sh {public_ip}:/tmp/', shell=True)
     command = f'{SSH_CMD} {public_ip} << EOF\n\'bash -s\' < utils/create_ssh_config.sh\nEOF'
     logger.info(f'Command to create SSH config file: {command}')
-    subprocess.run(f'{SSH_CMD} {public_ip} << EOF\n\'bash -s\' < utils/create_ssh_config.sh\nEOF', shell=True)
+    subprocess.run(f'{SSH_CMD} {public_ip} << EOF\nbash /tmp/create_ssh_config.sh\nEOF', shell=True)
 
     
     # Check that SSH config was created:
@@ -753,7 +756,7 @@ def create_reverse_ssh_tunnel(ip_address, ssh_port):
     if not ssh_keys_exists:
         # Create SSH keys
         logger.warning(f'SSH keys not found in {ip_address}:~/.ssh/id_rsa. Creating keys...')
-        subprocess.run(f'{SSH_CMD} {ip_address} \'bash -s\' < utils/create_ssh_keys.sh', shell=True)
+        subprocess.run(f'{SSH_CMD} {ip_address} << EOF\n\'bash -s\' < utils/create_ssh_keys.sh\nEOF', shell=True)
         ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} << EOF\nls ~/.ssh/id_rsa 2>/dev/null || echo\nEOF")
         if not ssh_keys_exists:
             logger.error(f'Cannot create SSH keys in {ip_address}:~/.ssh/id_rsa. Exiting workflow...')
