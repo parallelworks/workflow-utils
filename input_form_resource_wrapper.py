@@ -293,7 +293,7 @@ def get_resource_internal_ip(resource_info, public_ip):
         command = f"{SSH_CMD} {public_ip} hostname -I"
     else:
         remote_command = f"/usr/sbin/ifconfig {internal_ip} | sed -En -e 's/.*inet ([0-9.]+).*/\\1/p'"
-        command = f"{SSH_CMD} {public_ip} \"{remote_command}\""
+        command = f"{SSH_CMD} {public_ip} << EOF\n\"{remote_command}\"\nEOF"
     
     internal_ip = get_command_output(command)
     return internal_ip.split(' ')[0]
