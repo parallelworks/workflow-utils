@@ -350,7 +350,7 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
 
     ssh_config_path = os.path.join(workdir, ssh_config_path)
 
-    command = f"{SSH_CMD} {public_ip} ls {ssh_config_path} 2>/dev/null || echo"
+    command = f"{SSH_CMD} {public_ip} << EOF\nls {ssh_config_path} 2>/dev/null || echo\nEOF"
 
     config_exists = get_command_output(command)
 
@@ -359,7 +359,7 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
     
     # Default to ~/.ssh/config
     ssh_config_path = '~/.ssh/config'
-    command = f"{SSH_CMD} {public_ip} ls ~/.ssh/config 2>/dev/null || echo"
+    command = f"{SSH_CMD} {public_ip} << EOF\nls ~/.ssh/config 2>/dev/null || echo\nEOF"
     config_exists = get_command_output(command)
     
     if config_exists:
@@ -370,7 +370,7 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
     subprocess.run(f'{SSH_CMD} {public_ip} \'bash -s\' < utils/create_ssh_config.sh', shell=True)
     
     # Check that SSH config was created:
-    command = f"{SSH_CMD} {public_ip} ls ~/.ssh/config 2>/dev/null || echo"
+    command = f"{SSH_CMD} {public_ip} << EOF\nls ~/.ssh/config 2>/dev/null || echo\nEOF"
     config_exists = get_command_output(command)
     if config_exists:
         return ssh_config_path
@@ -394,7 +394,7 @@ def get_ssh_usercontainer_options(ssh_config_path, jobschedulertype, private_ip)
 
 def get_ssh_usercontainer_port(ssh_config_path, ip_address):
     # FIXME: Improve port parsing!
-    command = f"{SSH_CMD} {ip_address} cat {ssh_config_path} | grep Port | awk \'{{print $2}}\'"
+    command = f"{SSH_CMD} {ip_address} << EOF\ncat {ssh_config_path} | grep Port | awk \'{{print $2}}\'\nEOF"
     ssh_port = get_command_output(command)
     
     if not ssh_port:
@@ -489,7 +489,7 @@ def complete_resource_information(inputs_dict):
         if inputs_dict['jobschedulertype'] == 'SLURM':
             if '_sch__dd_partition_e_' in inputs_dict:
                 partition = inputs_dict['_sch__dd_partition_e_']
-                command_to_obtain_cpus_per_node=f"{SSH_CMD} {public_ip} sinfo -Nel | awk '/{partition}/ " + "{print $5}' | tail -n1"
+                command_to_obtain_cpus_per_node=f"{SSH_CMD} {public_ip} << EOF\nsinfo -Nel | awk '/{partition}/ " + "{print $5}' | tail -n1\nEOF"
                 cpus_per_node = get_command_output(command_to_obtain_cpus_per_node)
                 if cpus_per_node:
                     cpus_per_node = int(cpus_per_node)
@@ -713,7 +713,7 @@ def is_key_in_authorized_keys(public_key):
     return False
 
 def get_resource_public_key(ip_address):
-    ssh_public_key = get_command_output(f'{SSH_CMD} {ip_address} cat ~/.ssh/id_rsa.pub')
+    ssh_public_key = get_command_output(f'{SSH_CMD} {ip_address} << EOF\ncat ~/.ssh/id_rsa.pub\nEOF')
     return ssh_public_key
 
 def add_key_to_authorized_keys(public_key):
@@ -746,12 +746,12 @@ def extract_resource_inputs(inputs_dict, resource_label):
 
 def create_reverse_ssh_tunnel(ip_address, ssh_port):
     # Check if ssh keys exists
-    ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} ls ~/.ssh/id_rsa 2>/dev/null || echo")
+    ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} << EOF\nls ~/.ssh/id_rsa 2>/dev/null || echo\nEOF")
     if not ssh_keys_exists:
         # Create SSH keys
         logger.warning(f'SSH keys not found in {ip_address}:~/.ssh/id_rsa. Creating keys...')
         subprocess.run(f'{SSH_CMD} {ip_address} \'bash -s\' < utils/create_ssh_keys.sh', shell=True)
-        ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} ls ~/.ssh/id_rsa 2>/dev/null || echo")
+        ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} << EOF\nls ~/.ssh/id_rsa 2>/dev/null || echo\nEOF")
         if not ssh_keys_exists:
             logger.error(f'Cannot create SSH keys in {ip_address}:~/.ssh/id_rsa. Exiting workflow...')
             print(error_message, flush=True)  # Print the error message
@@ -773,7 +773,7 @@ def create_reverse_ssh_tunnel(ip_address, ssh_port):
 
 def check_slurm(public_ip):
     # Fail if slurmctld is not running
-    command = f'{SSH_CMD} {public_ip} ps aux | grep slurmctld | grep -v grep || echo'
+    command = f'{SSH_CMD} {public_ip} << EOF\nps aux | grep slurmctld | grep -v grep || echo\nEOF'
     is_slurmctld = get_command_output(command)
 
     if not is_slurmctld:
