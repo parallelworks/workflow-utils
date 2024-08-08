@@ -197,19 +197,14 @@ def establish_ssh_connection(resource_info):
         ip_address = get_resource_external_ip(resource_info)
         username = get_resource_user(resource_info)
         if '@' in ip_address:
-            command = f"""{SSH_CMD} {ip_address} << 'EOF'
-                hostname
-                EOF"""
+            command = f"{SSH_CMD} {ip_address}"
         else:
-            command = f"""{SSH_CMD} {username}@{ip_address} << 'EOF'
-            hostname
-            EOF"""
+            command = f"{SSH_CMD} {username}@{ip_address}"
         
         logger.info(f'Testing SSH connection with command <{command}>')
         subprocess.run(command, check=True, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
     except Exception as e:
-        logger.info(e)
         msg = 'Unable to stablish SSH connection to resource <{name}> with namespace <{namespace}>'.format(
             name = resource_info['name'],
             namespace = resource_info['namespace']
