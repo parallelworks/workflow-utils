@@ -350,7 +350,7 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
 
     ssh_config_path = os.path.join(workdir, ssh_config_path)
 
-    command = f"{SSH_CMD} {public_ip} << EOF\nls {ssh_config_path} 2>/dev/null || echo\nEOF"
+    command = f"{SSH_CMD} {public_ip} << EOF\nls {ssh_config_path} || echo\nEOF"
 
     config_exists = get_command_output(command)
 
@@ -752,12 +752,12 @@ def extract_resource_inputs(inputs_dict, resource_label):
 
 def create_reverse_ssh_tunnel(ip_address, ssh_port):
     # Check if ssh keys exists
-    ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} << EOF\nls ~/.ssh/id_rsa 2>/dev/null || echo\nEOF")
+    ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} << EOF\nls ~/.ssh/id_rsa || echo\nEOF")
     if not ssh_keys_exists:
         # Create SSH keys
         logger.warning(f'SSH keys not found in {ip_address}:~/.ssh/id_rsa. Creating keys...')
         subprocess.run(f'{SSH_CMD} {ip_address} << EOF\n\'bash -s\' < utils/create_ssh_keys.sh\nEOF', shell=True)
-        ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} << EOF\nls ~/.ssh/id_rsa 2>/dev/null || echo\nEOF")
+        ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} << EOF\nls ~/.ssh/id_rsa || echo\nEOF")
         if not ssh_keys_exists:
             logger.error(f'Cannot create SSH keys in {ip_address}:~/.ssh/id_rsa. Exiting workflow...')
             print(error_message, flush=True)  # Print the error message
