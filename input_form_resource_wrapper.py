@@ -209,6 +209,7 @@ def establish_ssh_connection(resource_info):
         subprocess.run(command, check=True, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
     except Exception as e:
+        logger.info(e)
         msg = 'Unable to stablish SSH connection to resource <{name}> with namespace <{namespace}>'.format(
             name = resource_info['name'],
             namespace = resource_info['namespace']
