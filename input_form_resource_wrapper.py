@@ -288,9 +288,9 @@ def get_resource_internal_ip(resource_info, public_ip):
         internal_ip = ''
 
     if is_ip_address(internal_ip):
-        command = f"{SSH_CMD} {public_ip} hostname -I"
+        command = f"{SSH_CMD} {public_ip} << EOF\nhostname -I\nEOF"
     elif not internal_ip:
-        command = f"{SSH_CMD} {public_ip} hostname -I"
+        command = f"{SSH_CMD} {public_ip} << EOF\nhostname -I\nEOF"
     else:
         remote_command = f"/usr/sbin/ifconfig {internal_ip} | sed -En -e 's/.*inet ([0-9.]+).*/\\1/p'"
         command = f"{SSH_CMD} {public_ip} << EOF\n\"{remote_command}\"\nEOF"
