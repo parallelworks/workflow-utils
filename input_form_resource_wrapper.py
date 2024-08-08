@@ -370,13 +370,13 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
     # Copy utils/create_ssh_config.sh to the /tmp remote machine and run it
     logger.info(f'Copying create_ssh_config.sh to {public_ip} ...')
     subprocess.run(f'scp utils/create_ssh_config.sh {public_ip}:/tmp/', shell=True)
-    command = f'{SSH_CMD} {public_ip} << EOF\n\'bash -s\' < utils/create_ssh_config.sh\nEOF'
+    command = f'{SSH_CMD} {public_ip} << EOF\nbash /tmp/create_ssh_config.sh\nEOF'
     logger.info(f'Command to create SSH config file: {command}')
     subprocess.run(f'{SSH_CMD} {public_ip} << EOF\nbash /tmp/create_ssh_config.sh\nEOF', shell=True)
 
     
     # Check that SSH config was created:
-    command = f"{SSH_CMD} {public_ip} << EOF\nls ~/.ssh/config 2>/dev/null || echo\nEOF"
+    command = f"{SSH_CMD} {public_ip} << EOF\nls ~/.ssh/config || echo\nEOF"
     config_exists = get_command_output(command)
     if config_exists:
         return ssh_config_path
