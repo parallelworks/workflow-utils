@@ -253,6 +253,8 @@ def get_resource_workdir(resource_info, public_ip):
         workdir = coaster_properties['workdir']
     
     if not workdir:
+        logger.info('Workdir not found in resource properties. Trying to get workdir from resource...')
+        logger.info('Command: ' + f'{SSH_CMD} {public_ip} pwd')
         command = f'{SSH_CMD} {public_ip} pwd'
         workdir = get_command_output(command)
     
