@@ -359,7 +359,7 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
     
     # Default to ~/.ssh/config
     ssh_config_path = '~/.ssh/config'
-    command = f"{SSH_CMD} {public_ip} ls ~/.ssh/config 2>/dev/null || echo"
+    command = f"{SSH_CMD} {public_ip} \'ls ~/.ssh/config 2>/dev/null || echo\'"
     config_exists = get_command_output(command)
     
     if config_exists:
@@ -370,7 +370,7 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
     subprocess.run(f'{SSH_CMD} {public_ip} \'bash -s\' < utils/create_ssh_config.sh', shell=True)
     
     # Check that SSH config was created:
-    command = f"{SSH_CMD} {public_ip} ls ~/.ssh/config 2>/dev/null || echo"
+    command = f"{SSH_CMD} {public_ip} \'ls ~/.ssh/config 2>/dev/null || echo\'"
     config_exists = get_command_output(command)
     if config_exists:
         return ssh_config_path
@@ -713,7 +713,7 @@ def is_key_in_authorized_keys(public_key):
     return False
 
 def get_resource_public_key(ip_address):
-    ssh_public_key = get_command_output(f'{SSH_CMD} {ip_address} cat ~/.ssh/id_rsa.pub')
+    ssh_public_key = get_command_output(f"{SSH_CMD} {ip_address} \'cat ~/.ssh/id_rsa.pub\'")
     return ssh_public_key
 
 def add_key_to_authorized_keys(public_key):
@@ -746,12 +746,12 @@ def extract_resource_inputs(inputs_dict, resource_label):
 
 def create_reverse_ssh_tunnel(ip_address, ssh_port):
     # Check if ssh keys exists
-    ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} ls ~/.ssh/id_rsa 2>/dev/null || echo")
+    ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} \'ls ~/.ssh/id_rsa 2>/dev/null || echo\'")
     if not ssh_keys_exists:
         # Create SSH keys
         logger.warning(f'SSH keys not found in {ip_address}:~/.ssh/id_rsa. Creating keys...')
         subprocess.run(f'{SSH_CMD} {ip_address} \'bash -s\' < utils/create_ssh_keys.sh', shell=True)
-        ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} ls ~/.ssh/id_rsa 2>/dev/null || echo")
+        ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} \'ls ~/.ssh/id_rsa 2>/dev/null || echo\'")
         if not ssh_keys_exists:
             logger.error(f'Cannot create SSH keys in {ip_address}:~/.ssh/id_rsa. Exiting workflow...')
             print(error_message, flush=True)  # Print the error message
