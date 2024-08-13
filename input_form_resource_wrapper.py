@@ -254,8 +254,8 @@ def get_resource_workdir(resource_info, public_ip):
     
     if not workdir:
         logger.info('Workdir not found in resource properties. Trying to get workdir from resource...')
-        logger.info('Command: ' + f'{SSH_CMD} {public_ip} pwd')
-        command = f'{SSH_CMD} {public_ip} pwd'
+        logger.info("Command: ' + f'{SSH_CMD} {public_ip} 'echo $HOME'")
+        command = f"{SSH_CMD} {public_ip} \'echo $HOME\'"
         workdir = get_command_output(command)
     
     return workdir
