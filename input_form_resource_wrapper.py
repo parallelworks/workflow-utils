@@ -350,7 +350,7 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
 
     ssh_config_path = os.path.join(workdir, ssh_config_path)
 
-    command = f"{SSH_CMD} {public_ip} ls {ssh_config_path} 2>/dev/null || echo"
+    command = f"{SSH_CMD} {public_ip} 'ls {ssh_config_path} 2>/dev/null || echo'"
 
     config_exists = get_command_output(command)
 
@@ -359,7 +359,7 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
     
     # Default to ~/.ssh/config
     ssh_config_path = '~/.ssh/config'
-    command = f"{SSH_CMD} {public_ip} \'ls ~/.ssh/config 2>/dev/null || echo\'"
+    command = f"{SSH_CMD} {public_ip} 'ls ~/.ssh/config 2>/dev/null || echo'"
     config_exists = get_command_output(command)
     
     if config_exists:
@@ -370,7 +370,7 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
     subprocess.run(f'{SSH_CMD} {public_ip} \'bash -s\' < utils/create_ssh_config.sh', shell=True)
     
     # Check that SSH config was created:
-    command = f"{SSH_CMD} {public_ip} \'ls ~/.ssh/config 2>/dev/null || echo\'"
+    command = f"{SSH_CMD} {public_ip} 'ls ~/.ssh/config 2>/dev/null || echo'"
     config_exists = get_command_output(command)
     if config_exists:
         return ssh_config_path
@@ -379,8 +379,6 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
         logger.error(error_message)
         print(error_message, flush=True)  # Print the error message
         sys.exit(1)  # Exit with an error code
-
-
 
 def get_ssh_usercontainer_options(ssh_config_path, jobschedulertype, private_ip):
     if ssh_config_path == '~/.ssh/config':
@@ -712,8 +710,11 @@ def is_key_in_authorized_keys(public_key):
                 return True
     return False
 
-def get_resource_public_key(ip_address):
-    ssh_public_key = get_command_output(f"{SSH_CMD} {ip_address} \'cat ~/.ssh/id_rsa.pub\'")
+def get_resource_public_key(ip_address, key_protected):
+    if key_protected:
+        ssh_public_key = get_command_output(f"{SSH_CMD} {ip_address} 'cat ~/.ssh/pw_id_rsa.pub'")
+    else:
+        ssh_public_key = get_command_output(f"{SSH_CMD} {ip_address} 'cat ~/.ssh/id_rsa.pub'")
     return ssh_public_key
 
 def add_key_to_authorized_keys(public_key):
@@ -744,20 +745,29 @@ def extract_resource_inputs(inputs_dict, resource_label):
     
     return resource_inputs
 
-def create_reverse_ssh_tunnel(ip_address, ssh_port):
+def is_key_protected(key_path):
+    cmd = f'ssh-keygen -y -f {key_path} > /dev/null 2>&1'
+    result = subprocess.run(cmd, shell=True)
+    if result.returncode == 0:
+        return False  
+    else:
+        return True
+
+def create_reverse_ssh_tunnel(ip_address, ssh_port, ssh_config_path):
     # Check if ssh keys exists
-    ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} \'ls ~/.ssh/id_rsa 2>/dev/null || echo\'")
-    if not ssh_keys_exists:
+    ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} 'ls ~/.ssh/id_rsa 2>/dev/null || echo'")
+    key_protected = is_key_protected(os.path.expanduser('~/.ssh/id_rsa'))
+    if not ssh_keys_exists or key_protected:
         # Create SSH keys
-        logger.warning(f'SSH keys not found in {ip_address}:~/.ssh/id_rsa. Creating keys...')
-        subprocess.run(f'{SSH_CMD} {ip_address} \'bash -s\' < utils/create_ssh_keys.sh', shell=True)
-        ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} \'ls ~/.ssh/id_rsa 2>/dev/null || echo\'")
+        logger.warning(f'SSH keys not found or protected in {ip_address}:~/.ssh/id_rsa. Creating keys...')
+        subprocess.run(f'{SSH_CMD} {ip_address} "bash -s" < utils/create_ssh_keys.sh "{ssh_config_path}"', shell=True)
+        ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} 'ls ~/.ssh/pw_id_rsa 2>/dev/null || echo'")
         if not ssh_keys_exists:
-            logger.error(f'Cannot create SSH keys in {ip_address}:~/.ssh/id_rsa. Exiting workflow...')
+            logger.error(f'Cannot create SSH keys in {ip_address}:~/.ssh/pw_id_rsa. Exiting workflow...')
             print(error_message, flush=True)  # Print the error message
             sys.exit(1)  # Exit with an error code
     
-    ssh_public_key = get_resource_public_key(ip_address)
+    ssh_public_key = get_resource_public_key(ip_address, key_protected)
     if not is_key_in_authorized_keys(ssh_public_key):
         logger.warning(f'SSH public key not found in ~/.ssh/authorized_keys. Adding key...')
         add_key_to_authorized_keys(ssh_public_key)
@@ -803,7 +813,9 @@ def prepare_resource(inputs_dict, resource_label):
     
     if not is_ssh_tunnel_working(ip_address, ssh_usercontainer_options_controller):
         logger.warning('SSH reverse tunnel is not working. Attempting to re-establish tunnel...')
-        create_reverse_ssh_tunnel(ip_address, ssh_port)
+        ssh_config_path = resource_inputs['resource']['ssh_config_path']
+        logger.info(f'SSH config path: {ssh_config_path}')
+        create_reverse_ssh_tunnel(ip_address, ssh_port, ssh_config_path)
 
 def clean_inputs(inputs_dict):
     """
