@@ -763,7 +763,8 @@ def create_reverse_ssh_tunnel(ip_address, ssh_port, ssh_config_path):
         subprocess.run(f'{SSH_CMD} {ip_address} "bash -s" < utils/create_ssh_keys.sh "{ssh_config_path}"', shell=True)
         ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} 'ls ~/.ssh/pw_id_rsa 2>/dev/null || echo'")
         if not ssh_keys_exists:
-            logger.error(f'Cannot create SSH keys in {ip_address}:~/.ssh/pw_id_rsa. Exiting workflow...')
+            error_message = f'Cannot create SSH keys in {ip_address}:~/.ssh/pw_id_rsa. Exiting workflow...'
+            logger.error(error_message)
             print(error_message, flush=True)  # Print the error message
             sys.exit(1)  # Exit with an error code
     
