@@ -367,7 +367,7 @@ def get_ssh_config_path(workdir, jobschedulertype, public_ip):
     
     # Create SSH config file
     logger.warning(f'SSH config file not found. Creating {ssh_config_path} ...')
-    subprocess.run(f'{SSH_CMD} {public_ip} \'bash -s\' < utils/create_ssh_config.sh', shell=True)
+    subprocess.run(f'{SSH_CMD} {public_ip} \'bash -s\' < workflow-utils/create_ssh_config.sh', shell=True)
     
     # Check that SSH config was created:
     command = f"{SSH_CMD} {public_ip} 'ls ~/.ssh/config 2>/dev/null || echo'"
@@ -760,7 +760,7 @@ def create_reverse_ssh_tunnel(ip_address, ssh_port, ssh_config_path):
     if not ssh_keys_exists or key_protected:
         # Create SSH keys
         logger.warning(f'SSH keys not found or protected in {ip_address}:~/.ssh/id_rsa. Creating keys...')
-        subprocess.run(f'{SSH_CMD} {ip_address} "bash -s" < utils/create_ssh_keys.sh "{ssh_config_path}"', shell=True)
+        subprocess.run(f'{SSH_CMD} {ip_address} "bash -s" < workflow-utils/create_ssh_keys.sh "{ssh_config_path}"', shell=True)
         ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} 'ls ~/.ssh/pw_id_rsa 2>/dev/null || echo'")
         if not ssh_keys_exists:
             error_message = f'Cannot create SSH keys in {ip_address}:~/.ssh/pw_id_rsa. Exiting workflow...'
