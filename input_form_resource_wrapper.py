@@ -137,15 +137,29 @@ MAX_PORT: int = 55500
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def get_logger(log_file, name, level = logging.INFO):
+def get_logger(log_file, name, level=logging.INFO):
     formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s')
-    os.makedirs(os.path.dirname(log_file), exist_ok = True)
-    handler = logging.FileHandler(log_file)
-    handler.setFormatter(formatter)
+    
+    # Create directory for the log file if it doesn't exist
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+    
+    # Create a file handler for writing to the log file
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(formatter)
+    
+    # Create a stream handler for printing to stdout
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
+    
+    # Get the logger
     logger = logging.getLogger(name)
     logger.setLevel(level)
-    logger.addHandler(handler)
-    return logging.getLogger(name)
+    
+    # Add both handlers to the logger
+    logger.addHandler(file_handler)
+    logger.addHandler(stream_handler)
+    
+    return logger
 
 os.makedirs(RESOURCES_DIR, exist_ok = True)
 log_file = os.path.join(RESOURCES_DIR, os.path.basename(__file__).replace('py', 'log'))
