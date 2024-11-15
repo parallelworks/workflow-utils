@@ -128,6 +128,7 @@ def encode_string_to_base64(text):
 
 RESOURCES_DIR: str = 'resources'
 SUPPORTED_RESOURCE_TYPES: list = ['gclusterv2', 'pclusterv2', 'azclusterv2', 'slurmshv2', 'existing', 'aws-slurm', 'google-slurm', 'azure-slurm']
+V3_CLUSTERS: list = ['aws-slurm', 'google-slurm', 'azure-slurm']
 ONPREM_RESOURCE_TYPES: list = ['slurmshv2', 'existing']
 SSH_CMD: str = 'ssh  -o StrictHostKeyChecking=no'
 PW_PLATFORM_HOST: str = os.environ['PW_PLATFORM_HOST']
@@ -768,12 +769,12 @@ def is_key_protected(key_path):
     else:
         return True
 
-def create_reverse_ssh_tunnel(ip_address, ssh_port, ssh_config_path):
+def create_reverse_ssh_tunnel(ip_address, ssh_port, ssh_config_path, resource_type):
     # Check if ssh keys exists
     ssh_keys_exists = get_command_output(f"{SSH_CMD} {ip_address} \"bash -c 'ls ~/.ssh/id_rsa 2>/dev/null || echo'\"")
     key_protected = is_key_protected(os.path.expanduser('~/.ssh/id_rsa'))
     logger.info(f'key_protected={key_protected}, ssh_key_exists={ssh_keys_exists}')
-    if not ssh_keys_exists or key_protected:
+    if not ssh_keys_exists or key_protected or resource_type in V3_CLUSTERS:
         # Create SSH keys
         logger.warning(f'SSH keys not found or protected in {ip_address}:~/.ssh/id_rsa. Creating keys...')
         subprocess.run(f'{SSH_CMD} {ip_address} "bash -s" < {SCRIPT_DIR}/create_ssh_keys.sh "{ssh_config_path}"', shell=True)
@@ -827,12 +828,13 @@ def prepare_resource(inputs_dict, resource_label):
     ip_address = inputs_dict[f'pwrl_{label}']["resource"]["publicIp"]
     ssh_port = resource_inputs['resource']['ssh_usercontainer_port']
     ssh_usercontainer_options_controller = resource_inputs['resource']['ssh_usercontainer_options_controller']
+    resource_type = resource_inputs['resource']['type']
     
     if not is_ssh_tunnel_working(ip_address, ssh_usercontainer_options_controller):
         logger.warning('SSH reverse tunnel is not working. Attempting to re-establish tunnel...')
         ssh_config_path = resource_inputs['resource']['ssh_config_path']
         logger.info(f'SSH config path: {ssh_config_path}')
-        create_reverse_ssh_tunnel(ip_address, ssh_port, ssh_config_path)
+        create_reverse_ssh_tunnel(ip_address, ssh_port, ssh_config_path, resource_type)
 
 def clean_inputs(inputs_dict):
     """
