@@ -1,0 +1,21 @@
+
+permissions:
+  - '*'
+sessions:
+  session:
+    useTLS: false
+    redirect: true
+    prompt-for-name:
+      default: "ngencerf"
+jobs:
+  main:
+    steps:
+      - name: Run
+        run: echo ${{ inputs.hello }}
+'on':
+  execute:
+    inputs:
+      hello:
+        label: My Input
+        type: string
+        default: Hello, world!
