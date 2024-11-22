@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Run
         run: echo ${{ inputs.hello }}
+      - name: Sleep
+        run: sleep 20
 'on':
   execute:
     inputs:
