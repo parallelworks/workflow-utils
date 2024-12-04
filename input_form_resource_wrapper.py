@@ -346,6 +346,9 @@ def replace_placeholders(inputs_dict, placeholder_dict):
     return inputs_dict 
 
 def get_partition_os(partition_name, resource_info):
+    if not 'config' in resource_info['variables']:
+        return 'linux'
+
     for partition in resource_info['variables']['config']['partition_config']:
         if partition['name'] == partition_name:
             if 'os' in partition:
