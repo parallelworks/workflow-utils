@@ -127,7 +127,7 @@ def encode_string_to_base64(text):
     return encoded_string
 
 RESOURCES_DIR: str = 'resources'
-SUPPORTED_RESOURCE_TYPES: list = ['gclusterv2', 'pclusterv2', 'azclusterv2', 'slurmshv2', 'existing', 'aws-slurm', 'google-slurm', 'azure-slurm']
+SUPPORTED_RESOURCE_TYPES: list = ['gclusterv2', 'pclusterv2', 'azclusterv2', 'slurmshv2', 'existing', 'aws-slurm', 'google-slurm', 'azure-slurm', 'openstack-slurm']
 ONPREM_RESOURCE_TYPES: list = ['slurmshv2', 'existing']
 SSH_CMD: str = 'ssh  -o StrictHostKeyChecking=no'
 PW_PLATFORM_HOST: str = os.environ['PW_PLATFORM_HOST']
