@@ -48,7 +48,7 @@ echo "===> Will build OpenMPI with gcc v$gcc_version"
 #export OMPI_MINOR_VERSION=.6
 # OpenMPI 5.0.1 (Recommended by spack-stack)
 export OMPI_MAJOR_VERSION=5.0
-export OMPI_MINOR_VERSION=.1
+export OMPI_MINOR_VERSION=.8
 export OMPI_VERSION=${OMPI_MAJOR_VERSION}${OMPI_MINOR_VERSION}
 export OMPI_URL_PREFIX="https://download.open-mpi.org/release/open-mpi"
 export OMPI_URL="$OMPI_URL_PREFIX/v$OMPI_MAJOR_VERSION/openmpi-$OMPI_VERSION.tar.gz"
