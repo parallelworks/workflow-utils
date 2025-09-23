@@ -106,7 +106,7 @@ echo "===> Making temporary build dir"
 # up development testing of downstream Spack actions
 export OMPI_TMP_BUILD_DIR=${PW_SW_ROOT}/tmp/openmpi
 #rm -rf $OMPI_TMP_BUILD_DIR
-mkdir -p ${PW_TMP_BUILD_DIR}
+mkdir -p ${OMPI_TMP_BUILD_DIR}
 
 echo "===> Downloading OpenMPI v$OMPI_VERSION"
 cd ${OMPI_TMP_BUILD_DIR} && wget -O openmpi-$OMPI_VERSION.tar.gz $OMPI_URL && tar -xzf openmpi-$OMPI_VERSION.tar.gz
