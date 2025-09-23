@@ -5,19 +5,36 @@ echo Explicit install of OpenMPI outside of Spack
 
 #======================================
 # ASSUME THAT THIS STEP IS ALREADY DONE
-# OR IT IS SIMPLY MISSING.
+# OR IT IS SIMPLY MISSING. For now, I
+# have hard coded with_pmi=false
 #======================================
-# Need to install pmi.h headers
+# Need to install pmi.h headers to use
+# PMI. The best place to get them is 
+# pmix-devel (see below). Another option 
+# is slurm-devel, but the default 
+# version of that package conflicts with 
+# the newer, preinstalled Slurm versions.
+#
 #sudo yum install -y pmix-devel
+#
 # To check if this package is present,
 # rpm -aq | grep pmix-devel
 
-#======================================
+#===========================================
 # To check which versions of gcc are available
 # on Rocky8 and Rocky9, run the following:
 # ls /opt/rh/ | grep gcc
 # and the output will be a list like this:
 # gcc-toolset-<9|10|11|12|13|14>
+#
+# Currently, just use whatever is the default
+# gcc. Users could customize which gcc with inputs
+# to this workflow and/or running
+#
+# source /opt/rh/gcc-toolset-<gcc_version>/enable
+#
+# in this script and/or in their .bashrc.
+#=================================================
 gcc_version=$(gcc --version | awk 'NR==1{print $3}')
 echo "===> Will build OpenMPI with gcc v$gcc_version"
 
@@ -37,7 +54,6 @@ fi
 # Proceed with installation
 mkdir -p $OMPI_DIR/bin
 mkdir -p $OMPI_DIR/lib
-
 
 # Update OpenMPI version as needed
 # v5.0+ requires PMIx.
@@ -88,7 +104,7 @@ fi
 echo "===> Making temporary build dir"
 # Do not delete existing temporary OMPI dir to speed
 # up development testing of downstream Spack actions
-export OMPI_TMP_BUILD_DIR=${PW_SW_ROOT}/tmp/ompi
+export OMPI_TMP_BUILD_DIR=${PW_SW_ROOT}/tmp/openmpi
 #rm -rf $OMPI_TMP_BUILD_DIR
 mkdir -p ${PW_TMP_BUILD_DIR}
 
