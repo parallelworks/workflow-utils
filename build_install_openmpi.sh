@@ -38,11 +38,28 @@ echo Explicit install of OpenMPI outside of Spack
 gcc_version=$(gcc --version | awk 'NR==1{print $3}')
 echo "===> Will build OpenMPI with gcc v$gcc_version"
 
+#======================================
+# Specify version of OpenMPI to build
+#======================================
+# Update OpenMPI version as needed
+# v5.0+ requires PMIx.
+# OpenMPI 4.1.6
+#export OMPI_MAJOR_VERSION=4.1
+#export OMPI_MINOR_VERSION=.6
+# OpenMPI 5.0.1 (Recommended by spack-stack)
+export OMPI_MAJOR_VERSION=5.0
+export OMPI_MINOR_VERSION=.1
+export OMPI_VERSION=${OMPI_MAJOR_VERSION}${OMPI_MINOR_VERSION}
+export OMPI_URL_PREFIX="https://download.open-mpi.org/release/open-mpi"
+export OMPI_URL="$OMPI_URL_PREFIX/v$OMPI_MAJOR_VERSION/openmpi-$OMPI_VERSION.tar.gz"
+
+#=====================================================
 echo "===> Set up OpenMPI build environment variables"
+#=====================================================
 
 # OpenMPI needs to be installed in a shared directory
 export PW_SW_ROOT=${HOME}/pw/software
-export OMPI_DIR=${PW_SW_ROOT}/openmpi
+export OMPI_DIR=${PW_SW_ROOT}/openmpi-${OMPI_VERSION}
 
 # Check if OpenMPI is already installed
 if [ -d $OMPI_DIR ]; then
@@ -55,17 +72,6 @@ fi
 mkdir -p $OMPI_DIR/bin
 mkdir -p $OMPI_DIR/lib
 
-# Update OpenMPI version as needed
-# v5.0+ requires PMIx.
-# OpenMPI 4.1.6
-export OMPI_MAJOR_VERSION=4.1
-export OMPI_MINOR_VERSION=.6
-# OpenMPI 5.0.1 (Recommended by spack-stack)
-#export OMPI_MAJOR_VERSION=5.0
-#export OMPI_MINOR_VERSION=.1
-export OMPI_VERSION=${OMPI_MAJOR_VERSION}${OMPI_MINOR_VERSION}
-export OMPI_URL_PREFIX="https://download.open-mpi.org/release/open-mpi"
-export OMPI_URL="$OMPI_URL_PREFIX/v$OMPI_MAJOR_VERSION/openmpi-$OMPI_VERSION.tar.gz"
 export PATH=$OMPI_DIR/bin:$PATH
 export LD_LIBRARY_PATH=$OMPI_DIR/lib:$LD_LIBRARY_PATH
 export MANPATH=$OMPI_DIR/share/man:$MANPATH
