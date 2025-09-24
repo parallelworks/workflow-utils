@@ -1,1 +1,39 @@
 # Workflow to build and install OpenMPI
+# using ../build_install_openmpi.sh
+jobs:
+  main:
+    ssh:
+      remoteHost: ${{inputs.resource.ip}}
+    steps:
+      - name: Get code
+        run: |
+          echo "Cloning repo to $PWD"
+          git clone https://github.com/${{ inputs.gh_org}}/${{ inputs.gh_repo}}
+          echo "Checking out branch ${{ inputs.gh_branch}}"
+          cd ${{ inputs.gh_repo }}
+          git checkout ${{ inputs.gh_branch }}
+      - name: Run OpenMPI build and install
+        run: |
+          cd ${{ inputs.gh_repo }}
+          ./build_install_openmpi.sh
+'on':
+  execute:
+    inputs:
+      resource:
+        label: Resource Target
+        type: compute-clusters
+        autoselect: true
+        optional: false
+      gh_org:
+        label: GitHub organization/owner
+        type: string
+        default: parallelworks
+      gh_repo:
+        label: GitHub repository
+        type: string
+        default: workflow-utils
+      gh_branch:
+        label: GitHub branch
+        type: string
+        default: main
+
