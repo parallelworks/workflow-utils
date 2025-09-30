@@ -1,0 +1,61 @@
+jobs:
+  main:
+    ssh:
+      remoteHost: ${{inputs.resource.ip}}
+    steps:
+      - name: Complete Slurm Allocation Workflow
+        run: |
+          set -e
+          
+          echo "=== SLURM ALLOCATION WORKFLOW ==="
+          
+          # Clean up any existing files
+          rm -f /tmp/slurm_allocation_info.txt
+          
+          # Run allocation and jobs
+          salloc --nodes=1 --time=60:00 bash -c '
+              echo "=== ALLOCATION GRANTED ==="
+              echo "Job ID: $SLURM_JOB_ID"
+              echo "Nodes: $SLURM_JOB_NODELIST" 
+              echo ""
+              
+              # Save allocation info to file
+              cat > /tmp/slurm_allocation_info.txt << EOF
+          SLURM_JOB_ID=$SLURM_JOB_ID
+          SLURM_JOB_NODELIST=$SLURM_JOB_NODELIST
+          SLURM_NNODES=$SLURM_NNODES
+          SLURM_NTASKS=$SLURM_NTASKS
+          ALLOCATION_TIME=$(date)
+          EOF
+              
+              echo "=== RUNNING JOBS ON ALLOCATION ==="
+              
+              echo "Job 1: Getting hostnames"
+              srun hostname
+              echo ""
+              
+              echo "Job 2: System information"
+              srun uname -a
+              echo ""
+              
+              echo "Job 3: Custom commands"
+              srun bash -c "echo \"Custom job on \$(hostname) at \$(date)\""
+              echo ""
+              
+              echo "Job 4: Environment check"
+              srun bash -c "echo \"Job ID: \$SLURM_JOB_ID, Node: \$(hostname)\""
+              echo ""
+              
+              echo "=== ALL JOBS COMPLETED ==="
+          '
+          
+          echo "=== WORKFLOW FINISHED ==="
+
+'on':
+  execute:
+    inputs:
+      resource:
+        label: Slurm Cluster Resource
+        type: compute-clusters
+        autoselect: true
+        optional: false
