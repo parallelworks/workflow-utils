@@ -1,0 +1,58 @@
+jobs:
+  allocate:
+    steps:
+      - name: Allocation info file
+        uses: workflow/salloc_subworkflow
+        with:
+          resource: ${{inputs.resource}}
+          partition: ${{ inputs.partition }}
+          nodes: ${{ inputs.nodes }}
+          walltime: ${{ inputs.walltime }}
+      - name: Copy file to parent directory
+        run: |
+          cp subworkflows/*/step_*/slurm_allocation_info.txt .
+  hello1:
+    ssh:
+      remoteHost: ${{inputs.resource}}
+    needs:
+      - allocate
+    steps:
+      - run: |
+          JOBID=$(grep '^SLURM_JOB_ID=' /tmp/slurm_allocation_info.txt | cut -d= -f2)
+          srun --jobid=$JOBID echo "hello world 1 on $(hostname)"
+  hello2:
+    ssh:
+      remoteHost: ${{inputs.resource}}
+    needs:
+      - allocate
+    steps:
+      - run: |
+          JOBID=$(grep '^SLURM_JOB_ID=' /tmp/slurm_allocation_info.txt | cut -d= -f2)
+          srun --jobid=$JOBID echo "hello world 2 on $(hostname)"
+  relinquish:
+    ssh:
+      remoteHost: ${{inputs.resource}}
+    needs:
+      - hello1
+      - hello2
+    steps:
+      - run: scancel $JOBID
+'on':
+  execute:
+    inputs:
+      resource:
+        type: compute-clusters
+        autoselect: true
+        optional: false
+        label: Slurm Cluster Resource
+      partition:
+        label: Partition
+        type: slurm-partitions
+        resource: ${{ inputs.resource }}
+      nodes:
+        label: Number of Nodes
+        type: number
+      walltime:
+        default: '60:00'
+        label: Walltime
+        type: string

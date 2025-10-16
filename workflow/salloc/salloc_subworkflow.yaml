@@ -1,0 +1,70 @@
+jobs:
+  allocation:
+    ssh:
+      remoteHost: ${{inputs.resource.ip}}
+    steps:
+      - name: Create Slurm Allocation Info File
+        run: |
+          set -e
+
+          INFO_FILE="/tmp/slurm_allocation_info.txt"
+
+          echo "Cleaning up existing files"
+          rm -f "$INFO_FILE"
+          echo "=== Existing files cleaned up ==="
+
+          echo "Creating persistent allocation"
+          nohup salloc --nodes=${{inputs.nodes}} --time=${{inputs.walltime}} --no-shell > salloc.log 2>&1 &
+
+          sleep 5
+
+          JOBID=$(grep -oP 'Granted job allocation \K[0-9]+' salloc.log)
+
+          if [ -z "$JOBID" ]; then
+              echo "Failed to create allocation. Check salloc log:"
+              cat salloc.log
+              exit 1
+          fi
+
+          echo "Persistent allocation created with JOBID=$JOBID"
+
+          ALLOCATION_INFO=$(srun --jobid="$JOBID" bash -c '
+          echo "SLURM_JOB_ID=$SLURM_JOB_ID"
+          echo "SLURM_JOB_NODELIST=$SLURM_JOB_NODELIST"
+          echo "SLURM_NNODES=$SLURM_NNODES"
+          echo "SLURM_NTASKS=$SLURM_NTASKS"
+          echo "ALLOCATION_TIME=$(date)"
+          ')
+            
+          echo "$ALLOCATION_INFO" > "$INFO_FILE"
+
+          echo "Info file created"
+          echo ""
+  copy:
+    needs:
+      - allocation
+    steps:
+      - name: Copy file from cluster
+        run: |
+          set -e
+          echo "Copying file from cluster"
+          scp $USER@${{inputs.resource.ip}}:/tmp/slurm_allocation_info.txt /$(pwd)/slurm_allocation_info.txt
+          echo "Copied file from cluster in $(pwd)"
+'on':
+  execute:
+    inputs:
+      resource:
+        label: Slurm Cluster Resource
+        type: compute-clusters
+        autoselect: true
+        optional: false
+      partition:
+        resource: ${{inputs.resource}}
+        label: Partition
+        type: slurm-partitions
+      nodes:
+        label: Number of Nodes
+        type: number
+      walltime:
+        label: Walltime
+        type: string
