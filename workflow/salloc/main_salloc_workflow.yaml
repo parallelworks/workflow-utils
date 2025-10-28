@@ -35,6 +35,14 @@ jobs:
           done
           JOBID=$(grep '^SLURM_JOB_ID=' /tmp/slurm_allocation_info.txt | cut -d= -f2)
           srun --jobid=$JOBID echo "hello world 2 on $(hostname)"
+  relinquish:
+    ssh:
+      remoteHost: ${{inputs.resource}}
+    needs:
+      - hello1
+      - hello2
+    steps:
+      - run: touch RELEASE_ALLOCATION
 
 'on':
   execute:
