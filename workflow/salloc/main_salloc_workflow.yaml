@@ -14,10 +14,12 @@ jobs:
   hello1:
     ssh:
       remoteHost: ${{inputs.resource}}
-    needs:
-      - allocate
     steps:
       - run: |
+          while [ ! -f /tmp/slurm_allocation_info.txt ]; do
+              echo "Waiting for file /tmp/slurm_allocation_info.txt to be created"
+              sleep 5
+          done
           JOBID=$(grep '^SLURM_JOB_ID=' /tmp/slurm_allocation_info.txt | cut -d= -f2)
           srun --jobid=$JOBID echo "hello world 1 on $(hostname)"
   hello2:
@@ -27,16 +29,13 @@ jobs:
       - allocate
     steps:
       - run: |
+          while [ ! -f /tmp/slurm_allocation_info.txt ]; do
+              echo "Waiting for file /tmp/slurm_allocation_info.txt to be created"
+              sleep 5
+          done
           JOBID=$(grep '^SLURM_JOB_ID=' /tmp/slurm_allocation_info.txt | cut -d= -f2)
           srun --jobid=$JOBID echo "hello world 2 on $(hostname)"
-  relinquish:
-    ssh:
-      remoteHost: ${{inputs.resource}}
-    needs:
-      - hello1
-      - hello2
-    steps:
-      - run: scancel $JOBID
+
 'on':
   execute:
     inputs:
