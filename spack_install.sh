@@ -51,7 +51,6 @@ mkdir -p $SPACK_USER_CACHE_PATH
 
 cd $SPACK_DIR
 git clone --recurse-submodules --depth=2 -b ${spack_version} https://github.com/spack/spack
-export $SPACK_ROOT=$SPACK_DIR/spack
 cd spack
 source share/spack/setup-env.sh
 spack mirror add local_filesystem file://${SPACK_BUILDCACHE}
