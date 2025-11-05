@@ -79,8 +79,11 @@ spack add cuda
 
 # 13GB tar download, then unpacks to an
 # additional 
-spack add nvhpc
-spack add openmpi
+spack add nvhpc ++mpi
+# See what MPI NVHPC pulls up on its own.
+# installing OpenMPI separately resulted in
+# errors running mpif90.
+#spack add openmpi
 spack concretize
 spack install
 
