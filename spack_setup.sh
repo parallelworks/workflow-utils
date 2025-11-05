@@ -51,6 +51,7 @@ mkdir -p $SPACK_USER_CACHE_PATH
 
 cd $SPACK_DIR
 git clone --recurse-submodules --depth=2 -b ${spack_version} https://github.com/spack/spack
+export $SPACK_ROOT=$SPACK_DIR/spack
 cd spack
 source share/spack/setup-env.sh
 spack mirror add local_filesystem file://${SPACK_BUILDCACHE}
@@ -62,7 +63,10 @@ spack mirror list
 # Setup Spack environment
 #===============================
 spack env create $spack_env_name
-spacktivate $spack_env_name
+
+# Spacktivate alias does not work with isolated envs?
+#spacktivate $spack_env_name
+spack env activate $spack_env_name
 spack compiler find
 
 #===============================
