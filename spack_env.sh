@@ -21,5 +21,5 @@ export SPACK_DISABLE_LOCAL_CONFIG=true
 # and tracing install errors.
 export TMPDIR=${SPACK_DIR}/tmp
 
-source ${SPACK_DIR}/share/spack/setup-env.sh
+source ${SPACK_DIR}/spack/share/spack/setup-env.sh
 
