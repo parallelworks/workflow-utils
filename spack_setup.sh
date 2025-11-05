@@ -23,6 +23,7 @@ spack_buildcache=${spack_dir}/spack_buildcache
 # with mounted disks, this is nice to specify.
 export SPACK_USER_CONFIG_PATH=${spack_dir}/.spack
 export SPACK_USER_CACHE_PATH=${spack_dir}/spack_user_cache
+export SPACK_DISABLE_LOCAL_CONFIG=true
 
 # Default is /tmp, but this is restricted on some 
 # systems so reset to something explicit in the
