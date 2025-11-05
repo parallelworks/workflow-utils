@@ -80,6 +80,7 @@ spack add cuda
 # 13GB tar download, then unpacks to an
 # additional 
 spack add nvhpc
+spack add openmpi
 spack concretize
 spack install
 
