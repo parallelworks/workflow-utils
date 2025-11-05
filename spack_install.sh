@@ -83,6 +83,13 @@ spack add nvhpc ++mpi
 # installing OpenMPI separately resulted in
 # errors running mpif90.
 #spack add openmpi
+#
+# This seems to work...
+#spack add openmpi +pmi +internal-pmix +cuda
+#
+# But this might be better:
+# spack add openmpi +pmi +internal-pmix +cuda %nvhpc ^cuda
+
 spack concretize
 spack install
 
