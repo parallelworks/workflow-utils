@@ -148,6 +148,13 @@ os.makedirs(RESOURCES_DIR, exist_ok = True)
 log_file = os.path.join(RESOURCES_DIR, os.path.basename(__file__).replace('py', 'log'))
 logger = get_logger(log_file, 'resource_wrapper')
 
+# Given   /home/alvaro/pw/jobs/vscodecodeassist/00001
+# Returns              pw/jobs/vscodecodeassist/00001
+def get_pw_path(path):
+    marker = "pw/"
+    if marker in path:
+        return marker + path.split(marker, 1)[1]
+    raise ValueError("The string does not contain 'pw/'")
 
 def get_command_output(command):
     logger.info(f'Running command <{command}>')
@@ -226,6 +233,9 @@ def complete_resource_information(inputs_dict):
 
     inputs_dict['resource']['publicIp'] = inputs_dict['resource']['username'] + '@' + inputs_dict['resource']['publicIp']
     
+    command_to_get_home_directory = f"{SSH_CMD} {inputs_dict['resource']['publicIp']} pwd"
+    inputs_dict['resource']['home'] = get_command_output(command_to_get_home_directory)
+
     if 'workdir' in inputs_dict:
         inputs_dict['resource']['workdir'] = inputs_dict['workdir']
 
@@ -238,8 +248,7 @@ def complete_resource_information(inputs_dict):
     else:
         workdir = inputs_dict['resource'].get('workdir')
         if not workdir or workdir == '${HOME}':
-            command_to_get_home_directory = f"{SSH_CMD} {inputs_dict['resource']['publicIp']} pwd"
-            inputs_dict['resource']['workdir'] = get_command_output(command_to_get_home_directory)
+            inputs_dict['resource']['workdir'] = inputs_dict['resource']['home'] 
 
         if inputs_dict['jobschedulertype'] == 'SLURM':
             if '_sch__dd_partition_e_' in inputs_dict:
@@ -269,14 +278,14 @@ def complete_resource_information(inputs_dict):
 
     inputs_dict['resource']['jobdir'] = os.path.join(
         inputs_dict['resource']['workdir'],
-        'pw/jobs',
-        inputs_dict['workflow_name'],
-        inputs_dict['job_number']
+        get_pw_path(os.getcwd())
     )
 
     inputs_dict = replace_placeholders(
         inputs_dict, 
         {
+            '__home__': inputs_dict['resource']['home'],
+            '__HOME__': inputs_dict['resource']['home'],
             '__workdir__': inputs_dict['resource']['workdir'],
             '__WORKDIR__': inputs_dict['resource']['workdir'],
 	        '__user__': inputs_dict['resource']['username'],
@@ -308,10 +317,11 @@ def get_scheduler_directives_from_input_form(inputs_dict):
     The parameter names are converted to scheduler directives
     # Character mapping for special scheduler parameters:
     # 1. _sch_ --> ''
-    # 1. _d_ --> '-'
-    # 2. _dd_ --> '--'
-    # 2. _e_ --> '='
-    # 3. ___ --> ' ' (Not in this function)
+    # 2. _d_ --> '-'
+    # 3. _dd_ --> '--'
+    # 4. _e_ --> '='
+    # 5. _colon_ --> ':'
+    # 5. ___ --> ' ' (Not in this function)
     # Get special scheduler parameters
     """
 
@@ -322,6 +332,7 @@ def get_scheduler_directives_from_input_form(inputs_dict):
             schd = schd.replace('_d_', '-')
             schd = schd.replace('_dd_', '--')
             schd = schd.replace('_e_', '=')
+            schd = schd.replace('_colon_', ':')
             schd = schd.replace('___', ' ')
             if v:
                 scheduler_directives.append(schd+str(v))
@@ -496,11 +507,12 @@ if __name__ == '__main__':
     inputs_dict = clean_inputs(inputs_dict)
 
     # Add basic job info to inputs_dict:
-    inputs_dict['job_number'] = os.path.basename(os.getcwd())
+    pw_job_dir = os.getcwd()
+    inputs_dict['pw_job_dir'] = pw_job_dir
+    inputs_dict['job_number'] = get_pw_path(pw_job_dir).split('/')[3]
     inputs_dict['job_number_int'] = int(inputs_dict['job_number'])
-    inputs_dict['workflow_name'] = os.path.basename(os.path.dirname(os.getcwd()))
+    inputs_dict['workflow_name'] = get_pw_path(pw_job_dir).split('/')[2]
     inputs_dict['job_name'] = "{}-{}".format(inputs_dict['workflow_name'], inputs_dict['job_number'])
-    inputs_dict['pw_job_dir'] = os.getcwd()
     inputs_dict['pw_user'] = os.environ.get('PW_USER')
     inputs_dict['pw_platform_host'] = os.environ.get('PW_PLATFORM_HOST')
 
