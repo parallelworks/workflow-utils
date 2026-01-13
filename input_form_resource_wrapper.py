@@ -468,8 +468,8 @@ def complete_resource_information(inputs_dict):
     inputs_dict = replace_placeholders(
         inputs_dict, 
         {
-	        '__user__': inputs_dict['resource']['username'],
-            '__USER__': inputs_dict['resource']['username'],
+	        '__user__': inputs_dict['resource']['user'],
+            '__USER__': inputs_dict['resource']['user'],
             '__user__': os.environ['PW_USER'],
             '__USER__': os.environ['PW_USER'],
             '__pw_user__': os.environ['PW_USER'],
@@ -486,14 +486,14 @@ def complete_resource_information(inputs_dict):
     if inputs_dict['resource']['name'] == 'user_workspace':
         inputs_dict['jobschedulertype'] = 'LOCAL'
         inputs_dict['resource']['workdir'] = os.path.expanduser("~")
-        inputs_dict['resource']['username'] = os.environ['PW_USER']
+        inputs_dict['resource']['user'] = os.environ['PW_USER']
     else:
         resource_id = inputs_dict['resource']['id']
         resource_info = get_resource_info_with_verified_ip(resource_id)
         public_ip = get_resource_external_ip(resource_info)
 
         inputs_dict['resource']['publicIp'] = public_ip
-        inputs_dict['resource']['username'] = get_resource_user(resource_info)
+        inputs_dict['resource']['user'] = get_resource_user(resource_info)
         inputs_dict['resource']['type'] = resource_info['type']
         workdir = inputs_dict['resource'].get('workdir')
         if not workdir or workdir == '${HOME}':
@@ -585,8 +585,8 @@ def complete_resource_information(inputs_dict):
         {
             '__workdir__': inputs_dict['resource']['workdir'],
             '__WORKDIR__': inputs_dict['resource']['workdir'],
-	        '__user__': inputs_dict['resource']['username'],
-            '__USER__': inputs_dict['resource']['username'],
+	        '__user__': inputs_dict['resource']['user'],
+            '__USER__': inputs_dict['resource']['user'],
             '__user__': os.environ['PW_USER'],
             '__USER__': os.environ['PW_USER'],
             '__pw_user__': os.environ['PW_USER'],
