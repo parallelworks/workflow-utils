@@ -1,4 +1,4 @@
-#!/pw/.miniconda3/bin/python
+#!/usr/bin/python3
 import os
 import requests
 from base64 import b64encode

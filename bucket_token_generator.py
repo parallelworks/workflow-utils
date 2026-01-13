@@ -1,4 +1,4 @@
-#!/pw/.miniconda3/bin/python
+#!/usr/bin/python3
 import requests
 import os
 import json
