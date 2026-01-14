@@ -1,20 +1,33 @@
 jobs:
-  allocation:
+  release_allocation:
     ssh:
       remoteHost: ${{inputs.resource.ip}}
     steps:
+      - name: Release Slurm Allocation
+        run: |
+          while [ ! -f ../../../RELEASE_ALLOCATION ]; do
+            echo "$(date) Waiting for RELEASE_ALLOCATION file to release the allocation"
+            sleep 5
+          done
+        cleanup: |
+          JOBID=$(grep '^SLURM_JOB_ID=' $(pwd)/slurm_allocation_info.txt | cut -d= -f2)
+          scancel $JOBID
+  allocation:
+    steps:
       - name: Create Slurm Allocation Info File
+        ssh:
+          remoteHost: ${{ inputs.resource.ip }}
         run: |
           set -e
 
-          INFO_FILE="/tmp/slurm_allocation_info.txt"
+          INFO_FILE="slurm_allocation_info.txt"
 
           echo "Cleaning up existing files"
           rm -f "$INFO_FILE"
           echo "=== Existing files cleaned up ==="
 
           echo "Creating persistent allocation"
-          nohup salloc --nodes=${{inputs.nodes}} --time=${{inputs.walltime}} --no-shell > salloc.log 2>&1 &
+          nohup salloc --nodes=${{ inputs.nodes }} --time=${{ inputs.walltime }} --no-shell > salloc.log 2>&1 &
 
           sleep 5
 
@@ -40,17 +53,13 @@ jobs:
 
           echo "Info file created"
           echo ""
-  copy:
-    needs:
-      - allocation
-    steps:
       - name: Copy file from cluster
         run: |
           set -e
           echo "Copying file from cluster"
-          scp $USER@${{inputs.resource.ip}}:/tmp/slurm_allocation_info.txt /$(pwd)/slurm_allocation_info.txt
+          scp $USER@${{ inputs.resource.ip }}:$(pwd)/slurm_allocation_info.txt /$(pwd)/slurm_allocation_info.txt
           echo "Copied file from cluster in $(pwd)"
-'on':
+"on":
   execute:
     inputs:
       resource:
@@ -59,7 +68,7 @@ jobs:
         autoselect: true
         optional: false
       partition:
-        resource: ${{inputs.resource}}
+        resource: ${{ inputs.resource }}
         label: Partition
         type: slurm-partitions
       nodes:
