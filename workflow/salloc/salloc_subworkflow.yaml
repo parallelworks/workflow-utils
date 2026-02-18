@@ -1,4 +1,18 @@
 jobs:
+  release_allocation:
+    ssh:
+      remoteHost: ${{inputs.resource.ip}}
+    steps:
+      - name: Release Slurm Allocation
+        run: |
+          while [ ! -f RELEASE_ALLOCATION ]; do
+              echo "$(date) Waiting for RELEASE_ALLOCATION file to release the allocation"
+              sleep 5
+          done
+        cleanup: |
+          JOBID=$(grep '^SLURM_JOB_ID=' $(pwd)/slurm_allocation_info.txt | cut -d= -f2)
+          scancel $JOBID
+
   allocation:
     ssh:
       remoteHost: ${{inputs.resource.ip}}
