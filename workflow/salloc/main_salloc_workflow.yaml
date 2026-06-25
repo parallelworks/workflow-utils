@@ -4,40 +4,107 @@ jobs:
       - name: Allocation info file
         uses: workflow/salloc_subworkflow
         with:
-          resource: ${{inputs.resource}}
+          resource: ${{ inputs.resource }}
           partition: ${{ inputs.partition }}
           nodes: ${{ inputs.nodes }}
           walltime: ${{ inputs.walltime }}
+  copy-allocation-file:
+    ssh:
+      remoteHost: ${{ inputs.resource.ip }}
+    steps:
       - name: Copy file to parent directory
         run: |
-          cp subworkflows/*/step_*/slurm_allocation_info.txt .
+          set -e
+          echo "Looking for slurm_allocation_info.txt under subworkflows..."
+
+          SEARCH_PATH="subworkflows/allocate/step_*/slurm_allocation_info.txt"
+
+          echo "Waiting for $SEARCH_PATH to appear..."
+          while true; do
+            FOUND_FILE=$(find subworkflows/allocate/ -path "$SEARCH_PATH" 2>/dev/null | head -n 1)
+            if [ -n "$FOUND_FILE" ]; then
+              echo "Found allocation info file at: $FOUND_FILE"
+              cp "$FOUND_FILE" .
+              echo "Copied slurm_allocation_info.txt to $(pwd)"
+              break
+            fi
+            echo "Still waiting..."
+            sleep 5
+          done
   hello1:
     ssh:
-      remoteHost: ${{inputs.resource}}
-    needs:
-      - allocate
+      remoteHost: ${{ inputs.resource.ip }}
     steps:
       - run: |
-          JOBID=$(grep '^SLURM_JOB_ID=' /tmp/slurm_allocation_info.txt | cut -d= -f2)
-          srun --jobid=$JOBID echo "hello world 1 on $(hostname)"
+          while [ ! -f slurm_allocation_info.txt ]; do
+              echo "Waiting for file slurm_allocation_info.txt to be created"
+              sleep 5
+          done
+          JOBID=$(grep '^SLURM_JOB_ID=' $(pwd)/slurm_allocation_info.txt | cut -d= -f2)
+          srun --jobid="$JOBID" echo "hello world 1 on $(hostname)"
   hello2:
     ssh:
-      remoteHost: ${{inputs.resource}}
-    needs:
-      - allocate
+      remoteHost: ${{ inputs.resource.ip }}
     steps:
       - run: |
-          JOBID=$(grep '^SLURM_JOB_ID=' /tmp/slurm_allocation_info.txt | cut -d= -f2)
-          srun --jobid=$JOBID echo "hello world 2 on $(hostname)"
-  relinquish:
+          while [ ! -f slurm_allocation_info.txt ]; do
+              echo "Waiting for file slurm_allocation_info.txt to be created"
+              sleep 5
+          done
+          JOBID=$(grep '^SLURM_JOB_ID=' $(pwd)/slurm_allocation_info.txt | cut -d= -f2)
+          srun --jobid="$JOBID" echo "hello world 2 on $(hostname)"
+  mpi-hello-world:
     ssh:
-      remoteHost: ${{inputs.resource}}
+      remoteHost: ${{ inputs.resource.ip }}
+    steps:
+      - name: Run MPI Hello World
+        run: |
+          while [ ! -f slurm_allocation_info.txt ]; do
+              echo "Waiting for file slurm_allocation_info.txt to be created"
+              sleep 5
+          done
+          set -ex
+          JOBID=$(grep '^SLURM_JOB_ID=' $(pwd)/slurm_allocation_info.txt | cut -d= -f2)
+
+          echo "Running MPI Hello World using srun with jobid=$JOBID"
+          cat <<'EOF' > mpihello.c
+          #include <mpi.h>
+          #include <stdio.h>
+
+          int main(int argc, char** argv) {
+            MPI_Init(NULL, NULL);
+
+            int world_size;
+            MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+            int world_rank;
+            MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+            char processor_name[MPI_MAX_PROCESSOR_NAME];
+            int name_len;
+            MPI_Get_processor_name(processor_name, &name_len);
+
+            printf("Hello world from processor %s, rank %d out of %d processors\n",
+                  processor_name, world_rank, world_size);
+
+            MPI_Finalize();
+          }
+          EOF
+
+          source /home/jlin/pw/software/openmpi-4.1.6/env.sh
+          mpicc -o mpihello.out mpihello.c
+
+          srun --jobid="$JOBID" -N "${{ inputs.nodes }}" -n "${{ inputs.nodes }}" mpihello.out
+  release:
     needs:
       - hello1
       - hello2
+      - mpi-hello-world
+    ssh:
+      remoteHost: ${{ inputs.resource.ip }}
     steps:
-      - run: scancel $JOBID
-'on':
+      - run: touch RELEASE_ALLOCATION
+"on":
   execute:
     inputs:
       resource:
@@ -53,6 +120,6 @@ jobs:
         label: Number of Nodes
         type: number
       walltime:
-        default: '60:00'
+        default: "60:00"
         label: Walltime
         type: string
