@@ -1,0 +1,489 @@
+# =============================================================================
+# periodic-syncer.yaml
+#
+# A Parallel Works ACTIVATE workflow that runs a PERSISTENT background syncer.
+# Every INTERVAL seconds it mirrors a local outputs directory to a destination
+# that can be EITHER:
+#   * a filesystem path   (e.g. /home/user/backups)   -> uses `rsync`
+#   * a PW bucket URI      (e.g. pw://jdoe/my-bucket/) -> uses
+#                                                         `pw buckets get-token`
+#                                                         + `aws s3 sync`
+#
+# The destination type is auto-detected at runtime from the string, so callers
+# don't need to say which mode to use.
+#
+# DESIGNED AS A SUBWORKFLOW:
+#   Call it from a parent workflow with `uses: workflow/periodic-syncer` and
+#   pass inputs via `with:`. Because jobs run in parallel by default, the
+#   syncer job runs ALONGSIDE your other jobs. See the bottom of this file for
+#   a parent-workflow example and notes on lifecycle.
+#
+# IMPORTANT lifecycle note:
+#   This workflow's `sync` loop runs until its `timeout` elapses (or the run is
+#   cancelled). When used as a subworkflow step, the parent step will block for
+#   that whole duration. See the "Using as a subworkflow" section at the bottom
+#   for the two standard patterns (bounded lifetime vs. session/detach).
+# =============================================================================
+
+# Required so `pw buckets get-token` (and any other pw CLI calls) work from
+# inside the workflow run. Without "*", the run can only touch its own sessions.
+permissions: ["*"]
+
+# Hard cap on how long the syncer persists. Tune to your job's expected
+# lifetime. Remove or lengthen for very long-running companions, but remember
+# PW AWS bucket credentials expire after 12h (we re-fetch every cycle, so this
+# only matters for a single sync that itself runs >12h).
+timeout: 7d
+
+on:
+  execute:
+    inputs:
+      header:
+        type: header
+        text: Periodic Syncer
+        size: 20
+
+      source_dir:
+        type: string
+        label: Source directory
+        description: >-
+          Local directory whose contents are pushed to the destination each
+          cycle. A trailing slash controls rsync semantics as usual.
+        default: ~/pw/outputs/
+        optional: false
+
+      destination:
+        type: string
+        label: Destination (path or pw:// bucket URI)
+        description: >-
+          Either a filesystem path (e.g. /home/user/backups) or a PW bucket URI
+          (e.g. pw://jdoe/my-bucket/sync). The syncer auto-detects which it is.
+        placeholder: pw://jdoe/my-bucket/sync
+        optional: false
+
+      interval_seconds:
+        type: number
+        label: Interval (seconds)
+        description: Seconds between the START of each sync cycle.
+        default: 300
+        min: 1
+        step: 1
+        optional: false
+
+      warn_seconds:
+        type: number
+        label: Warn threshold (seconds)
+        description: Print a warning if a single sync runs longer than this.
+        default: 21600          # 6 hours
+        min: 0
+        step: 1
+        optional: false
+
+      extra_args:
+        type: string
+        label: Extra sync args
+        description: >-
+          Passed verbatim to the underlying tool. Note each tool takes different
+          flags: rsync (filesystem), aws s3 sync (AWS), gcloud storage rsync
+          (GCS), or azcopy sync (Azure). Leave blank if unsure.
+        default: ""
+        optional: true
+
+      cluster:
+        type: compute-clusters
+        label: Compute cluster
+        include-workspace: true
+        description: >-
+          The cluster whose filesystem the syncer watches. The loop runs ON this
+          host, so SOURCE is interpreted as a path local to the cluster. Leave
+          this on the user workspace to sync from the workspace instead. Both
+          filesystem and bucket (pw://) destinations work on any resource, since
+          the PW CLI is automatically authenticated in the run environment.
+        optional: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The persistent syncer. No `needs:` -> it starts immediately and runs in
+  # parallel with any sibling jobs (in this workflow or, when called as a
+  # subworkflow, alongside the parent's other jobs).
+  # ---------------------------------------------------------------------------
+  sync:
+    # Run the syncer ON the selected cluster. With a job-level ssh block, every
+    # step's `run` executes on that host, so SOURCE is a path local to the
+    # cluster. If the user left the selection on the workspace, inputs.cluster.ip
+    # is empty and ACTIVATE runs the steps on the user workspace instead. The PW
+    # CLI is authenticated in the run environment on either, so bucket mode works
+    # wherever the loop runs.
+    ssh:
+      remoteHost: ${{ inputs.cluster.ip }}
+    steps:
+      - name: Periodic sync loop
+        # early-cancel ensures the loop is torn down if a sibling job fails,
+        # so the syncer doesn't keep running after the work it supports dies.
+        early-cancel: any-job-failed
+        run: |
+          set -uo pipefail
+
+          # ---- Inputs injected from the workflow form -----------------------
+          SOURCE="${{ inputs.source_dir }}"
+          DEST="${{ inputs.destination }}"
+          INTERVAL="${{ inputs.interval_seconds }}"
+          WARN_SECONDS="${{ inputs.warn_seconds }}"
+          EXTRA_ARGS="${{ inputs.extra_args }}"
+
+          # ---- Logging helpers ----------------------------------------------
+          log()  { printf '%s [INFO]  %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
+          warn() { printf '%s [WARN]  %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
+          err()  { printf '%s [ERROR] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
+          human() { local s=$1; printf '%dh%02dm%02ds' $((s/3600)) $(((s%3600)/60)) $((s%60)); }
+
+          # ---- Validate ------------------------------------------------------
+          [ -d "$SOURCE" ] || { err "Source directory does not exist: $SOURCE"; exit 1; }
+          command -v rsync >/dev/null 2>&1 || warn "rsync not found; filesystem syncs will fail."
+
+          # ---- Detect destination type --------------------------------------
+          # PW bucket URIs look like:  pw://<user>/<bucket>[/optional/path]
+          # Anything else is treated as a filesystem path. For buckets, the cloud
+          # provider (aws/google/azure) and the native CSP URI are discovered at
+          # sync time from the get-token output (see load_credentials), so no
+          # provider-specific parsing of the pw:// string is needed here.
+          # (You can also see a bucket's CSP via `pw buckets ls -o table`, whose
+          # columns are URI, CSP, status, and CSP URI.)
+          IS_BUCKET=0
+          case "$DEST" in
+            pw://*) IS_BUCKET=1 ;;
+            *)      IS_BUCKET=0 ;;
+          esac
+
+          if [ "$IS_BUCKET" -eq 1 ]; then
+            command -v pw >/dev/null 2>&1 || { err "'pw' CLI not found; cannot sync to a bucket."; exit 1; }
+            log "Destination is a PW bucket: $DEST"
+            log "  (provider and CSP URI resolved from credentials each cycle)"
+          else
+            log "Destination is a filesystem path: $DEST"
+          fi
+
+          # ---- Credential loader (bucket mode only) -------------------------
+          # `pw buckets get-token` prints shell-ready `export VAR=value` lines on
+          # STDOUT, and human-readable hints (e.g. "To use the gcloud CLI...") on
+          # STDERR. We therefore capture STDOUT ONLY (no 2>&1) so the prose can't
+          # be sourced, then defensively keep only well-formed `export VAR=` lines
+          # before sourcing. This avoids errors like `line N: To: command not
+          # found` that occur when prose is fed to `source`.
+          # Stderr is captured separately so we can surface it on failure.
+          load_credentials() {
+            local creds errout
+            errout="$(mktemp)"
+            if ! creds="$(pw buckets get-token "$DEST" 2>"$errout")"; then
+              err "pw buckets get-token failed for $DEST:"; err "$(cat "$errout")"
+              rm -f "$errout"; return 1
+            fi
+            rm -f "$errout"
+            [ -z "$creds" ] && { err "get-token returned no output on stdout."; return 1; }
+
+            # Keep only lines of the form: [whitespace] export NAME=...
+            local export_lines
+            export_lines="$(printf '%s\n' "$creds" \
+              | grep -E '^[[:space:]]*export[[:space:]]+[A-Za-z_][A-Za-z0-9_]*=')"
+            if [ -z "$export_lines" ]; then
+              err "get-token stdout had no 'export VAR=' lines; not sourcing:"
+              err "$creds"; return 1
+            fi
+            # shellcheck disable=SC1090
+            source <(printf '%s\n' "$export_lines")
+          }
+
+          # ---- Resolve provider + destination URI from sourced credentials --
+          # After load_credentials, exactly one provider's variables are present.
+          # We detect which and set CSP_TOOL_DESC + a function `run_bucket_sync`
+          # accordingly. All providers emit the real bucket as BUCKET_URI (the
+          # pw:// name is NOT the actual cloud bucket name), so we use BUCKET_URI
+          # and append any sub-path from the pw:// URI for prefix targeting.
+          #   AWS  : AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (+ AWS_SESSION_TOKEN)
+          #          + BUCKET_URI=s3://...  -> aws s3 sync <src> <BUCKET_URI>/<path>
+          #   GCS  : CLOUDSDK_AUTH_ACCESS_TOKEN + BUCKET_URI=gs://...
+          #          -> gcloud storage rsync --recursive <src> <BUCKET_URI>/<path>
+          #   Azure: SAS token + BUCKET_URI=https://...blob.core.windows.net/...
+          #          -> azcopy sync <src> "<BUCKET_URI>/<path>?<SAS>"
+          # Returns 0 on a recognized provider, 1 otherwise.
+          resolve_provider() {
+            # Derive the sub-path after the bucket from the pw:// URI, so callers
+            # can target a prefix within the bucket (pw://user/bucket/sub -> /sub).
+            local no_scheme no_user bkt
+            no_scheme="${DEST#pw://}"            # user/bucket/sub/dir
+            no_user="${no_scheme#*/}"            # bucket/sub/dir
+            bkt="${no_user%%/*}"                 # bucket
+            DEST_SUBPATH="${no_user#"$bkt"}"     # /sub/dir  (or empty)
+
+            if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+              PROVIDER="aws"
+              # Use the real bucket URI from get-token (e.g. s3://663ba9...). The
+              # pw:// name (e.g. spackstack16) is NOT the actual cloud bucket
+              # name, so deriving s3://<name> from it fails with NoSuchBucket.
+              # Only fall back to deriving from pw:// if BUCKET_URI is absent.
+              if [ -n "${BUCKET_URI:-}" ]; then
+                CSP_URI="${BUCKET_URI%/}${DEST_SUBPATH}"
+              else
+                CSP_URI="s3://${bkt}${DEST_SUBPATH}"
+              fi
+              CSP_TOOL_DESC="aws s3 sync"
+              command -v aws >/dev/null 2>&1 || { err "'aws' CLI not found."; return 1; }
+            elif [ -n "${CLOUDSDK_AUTH_ACCESS_TOKEN:-}" ] && [ -n "${BUCKET_URI:-}" ]; then
+              PROVIDER="google"
+              # GCS get-token provides BUCKET_URI=gs://<id>; append any sub-path.
+              CSP_URI="${BUCKET_URI%/}${DEST_SUBPATH}"
+              CSP_TOOL_DESC="gcloud storage rsync"
+              command -v gcloud >/dev/null 2>&1 || { err "'gcloud' CLI not found."; return 1; }
+            elif [ -n "${AZURE_STORAGE_SAS_TOKEN:-}" ] || [ -n "${AZURE_STORAGE_CONNECTION_STRING:-}" ] || [ -n "${BUCKET_URI:-}" ]; then
+              PROVIDER="azure"
+              # Azure get-token provides a blob endpoint (commonly via BUCKET_URI)
+              # and a SAS token. azcopy wants the URL with the SAS appended.
+              CSP_URI="${BUCKET_URI%/}${DEST_SUBPATH}"
+              CSP_TOOL_DESC="azcopy sync"
+              command -v azcopy >/dev/null 2>&1 || { err "'azcopy' CLI not found."; return 1; }
+            else
+              err "Could not determine cloud provider from get-token output."
+              err "Expected AWS_*, CLOUDSDK_AUTH_ACCESS_TOKEN+BUCKET_URI, or Azure vars."
+              return 1
+            fi
+            return 0
+          }
+
+          # Run the actual provider-specific sync. BLOCKS until it completes.
+          run_bucket_sync() {
+            case "$PROVIDER" in
+              aws)
+                # shellcheck disable=SC2086
+                aws s3 sync "$SOURCE" "$CSP_URI" $EXTRA_ARGS
+                ;;
+              google)
+                # gcloud uses CLOUDSDK_AUTH_ACCESS_TOKEN from the environment.
+                # shellcheck disable=SC2086
+                gcloud storage rsync --recursive $EXTRA_ARGS "$SOURCE" "$CSP_URI"
+                ;;
+              azure)
+                # azcopy needs the SAS appended to the URL. If get-token exported
+                # the SAS separately, join them; otherwise assume CSP_URI is
+                # already a full SAS URL.
+                local target="$CSP_URI"
+                if [ -n "${AZURE_STORAGE_SAS_TOKEN:-}" ]; then
+                  case "$CSP_URI" in
+                    *\?*) target="${CSP_URI}&${AZURE_STORAGE_SAS_TOKEN#\?}" ;;
+                    *)    target="${CSP_URI}?${AZURE_STORAGE_SAS_TOKEN#\?}" ;;
+                  esac
+                fi
+                # shellcheck disable=SC2086
+                azcopy sync "$SOURCE" "$target" $EXTRA_ARGS
+                ;;
+              *)
+                err "Unknown provider '$PROVIDER'."; return 1 ;;
+            esac
+          }
+
+          # ---- One sync iteration -------------------------------------------
+          # Returns the underlying tool's exit code. BLOCKS until it completes.
+          do_sync() {
+            if [ "$IS_BUCKET" -eq 1 ]; then
+              log "Refreshing bucket credentials..."
+              load_credentials || return 99
+              resolve_provider || return 98
+              log "Provider: $PROVIDER | tool: $CSP_TOOL_DESC"
+              log "Starting bucket sync: $SOURCE -> $CSP_URI"
+              run_bucket_sync
+            else
+              log "Starting filesystem sync: $SOURCE -> $DEST"
+              mkdir -p "$DEST" 2>/dev/null || true
+              # -a archive, -z compress; --delete is NOT default (add via extra args).
+              # shellcheck disable=SC2086
+              rsync -az $EXTRA_ARGS "$SOURCE" "$DEST"
+            fi
+          }
+
+          # ---- Main loop -----------------------------------------------------
+          log "Starting periodic syncer."
+          log "  source:     $SOURCE"
+          log "  interval:   ${INTERVAL}s"
+          log "  warn after: ${WARN_SECONDS}s ($(human "$WARN_SECONDS"))"
+          [ -n "$EXTRA_ARGS" ] && log "  extra args: $EXTRA_ARGS"
+
+          # Trap signals so an in-flight sync finishes before we exit.
+          RUNNING=1
+          trap 'warn "Signal received; exiting after current sync."; RUNNING=0' INT TERM
+
+          while [ "$RUNNING" -eq 1 ]; do
+            cycle_start=$(date +%s)
+
+            sync_start=$(date +%s)
+            do_sync            # BLOCKING: next cycle waits for this to finish
+            rc=$?
+            sync_end=$(date +%s)
+            dur=$((sync_end - sync_start))
+
+            if [ "$rc" -eq 99 ]; then
+              err "Skipped cycle: could not obtain credentials."
+            elif [ "$rc" -eq 98 ]; then
+              err "Skipped cycle: could not determine cloud provider from credentials."
+            elif [ "$rc" -ne 0 ]; then
+              err "Sync tool exited with code $rc after $(human "$dur")."
+            else
+              log "Sync completed in $(human "$dur")."
+            fi
+
+            if [ "$dur" -gt "$WARN_SECONDS" ]; then
+              warn "Sync took $(human "$dur"), exceeding the $(human "$WARN_SECONDS") threshold."
+              [ "$IS_BUCKET" -eq 1 ] && warn "Note: PW bucket credentials are short-lived (AWS ~12h); a single sync longer than the token lifetime may fail partway. Credentials are refreshed each cycle."
+            fi
+
+            [ "$RUNNING" -eq 1 ] || break
+
+            # Sleep the remainder of the interval, measured from cycle start.
+            # If the sync overran the interval, start the next cycle now.
+            elapsed=$(( $(date +%s) - cycle_start ))
+            remaining=$(( INTERVAL - elapsed ))
+            if [ "$remaining" -gt 0 ]; then
+              log "Sleeping ${remaining}s until next cycle."
+              # 1s steps so signals interrupt promptly.
+              i=0
+              while [ "$i" -lt "$remaining" ] && [ "$RUNNING" -eq 1 ]; do
+                sleep 1; i=$((i+1))
+              done
+            else
+              log "Cycle ran ${elapsed}s (>= ${INTERVAL}s); starting next cycle now."
+            fi
+          done
+
+          log "Syncer exited cleanly."
+
+        # On teardown (cancel/finish/fail), do a final best-effort sync so the
+        # last writes are captured. Cleanup always runs if the step ran. This is
+        # self-contained (it cannot see the main step's shell functions).
+        cleanup: |
+          echo "[cleanup] attempting a final sync before shutdown..."
+          SOURCE="${{ inputs.source_dir }}"
+          DEST="${{ inputs.destination }}"
+          EXTRA_ARGS="${{ inputs.extra_args }}"
+          case "$DEST" in
+            pw://*)
+              # Capture STDOUT ONLY (prose hints go to stderr), then source just
+              # the well-formed export lines — same fix as the main loop.
+              creds="$(pw buckets get-token "$DEST")" || { echo "[cleanup] token fetch failed; skipping"; exit 0; }
+              export_lines="$(printf '%s\n' "$creds" | grep -E '^[[:space:]]*export[[:space:]]+[A-Za-z_][A-Za-z0-9_]*=')"
+              [ -z "$export_lines" ] && { echo "[cleanup] no export lines; skipping"; exit 0; }
+              # shellcheck disable=SC1090
+              source <(printf '%s\n' "$export_lines")
+
+              # Sub-path within the bucket from the pw:// URI.
+              no_scheme="${DEST#pw://}"; no_user="${no_scheme#*/}"
+              bkt="${no_user%%/*}"; subpath="${no_user#"$bkt"}"
+
+              if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+                if [ -n "${BUCKET_URI:-}" ]; then aws_target="${BUCKET_URI%/}${subpath}"; else aws_target="s3://${bkt}${subpath}"; fi
+                # shellcheck disable=SC2086
+                aws s3 sync "$SOURCE" "$aws_target" $EXTRA_ARGS || echo "[cleanup] final aws sync failed"
+              elif [ -n "${CLOUDSDK_AUTH_ACCESS_TOKEN:-}" ] && [ -n "${BUCKET_URI:-}" ]; then
+                # shellcheck disable=SC2086
+                gcloud storage rsync --recursive $EXTRA_ARGS "$SOURCE" "${BUCKET_URI%/}${subpath}" || echo "[cleanup] final gcloud sync failed"
+              elif [ -n "${BUCKET_URI:-}" ]; then
+                target="${BUCKET_URI%/}${subpath}"
+                if [ -n "${AZURE_STORAGE_SAS_TOKEN:-}" ]; then
+                  case "$target" in
+                    *\?*) target="${target}&${AZURE_STORAGE_SAS_TOKEN#\?}" ;;
+                    *)    target="${target}?${AZURE_STORAGE_SAS_TOKEN#\?}" ;;
+                  esac
+                fi
+                # shellcheck disable=SC2086
+                azcopy sync "$SOURCE" "$target" $EXTRA_ARGS || echo "[cleanup] final azcopy sync failed"
+              else
+                echo "[cleanup] could not determine provider; skipping final bucket sync"
+              fi
+              ;;
+            *)
+              mkdir -p "$DEST" 2>/dev/null || true
+              # shellcheck disable=SC2086
+              rsync -az $EXTRA_ARGS "$SOURCE" "$DEST" || echo "[cleanup] final rsync failed"
+              ;;
+          esac
+          echo "[cleanup] done."
+
+# =============================================================================
+# USING AS A SUBWORKFLOW
+# =============================================================================
+# Save this workflow (e.g. named "periodic-syncer"), then call it from a parent.
+#
+# Because a `uses:` step blocks until the called workflow finishes, and this
+# syncer loops until its timeout, you have two standard patterns:
+#
+# PATTERN A — Bounded companion (simplest).
+#   Put the syncer and your real work in SEPARATE PARALLEL JOBS in the PARENT.
+#   Give the syncer job `early-cancel: any-job-failed` (already set on the step
+#   here) and bound its lifetime with the parent step `timeout`. When your main
+#   job finishes, cancel the run (or let the timeout stop the syncer). The
+#   cleanup step guarantees a final flush.
+#
+#   # parent-workflow.yaml
+#   permissions: ["*"]
+#   on:
+#     execute:
+#       inputs:
+#         target_cluster:
+#           type: compute-clusters
+#           label: Cluster
+#   jobs:
+#     compute:
+#       ssh:
+#         remoteHost: ${{ inputs.target_cluster.ip }}
+#       steps:
+#         - name: Do the real work
+#           run: ./run_simulation.sh   # writes into /scratch/outputs/ on cluster
+#     syncer:
+#       steps:
+#         - name: Background syncer
+#           uses: workflow/periodic-syncer
+#           timeout: 1d
+#           early-cancel: any-job-failed
+#           with:
+#             source_dir: /scratch/outputs/
+#             destination: pw://jdoe/my-bucket/run-results
+#             interval_seconds: 300
+#             warn_seconds: 21600
+#             cluster: ${{ inputs.target_cluster }}   # pass the whole object
+#
+#   Note: with this pattern the run continues until BOTH jobs end. If you want
+#   the syncer to stop as soon as `compute` is done, have `compute` signal
+#   completion (e.g. cancel the run via `pw` API in its cleanup) — ACTIVATE does
+#   not auto-cancel sibling jobs on SUCCESS, only the early-cancel-on-FAILURE
+#   behavior is built in.
+#
+# THE `cluster` INPUT (added):
+#   Selecting a cluster makes the syncer's loop run ON that host via the job's
+#   `ssh:` block (remoteHost: ${{ inputs.cluster.ip }}), so SOURCE is a path
+#   local to the cluster. Pass the whole input object through from a parent
+#   (cluster: ${{ inputs.target_cluster }}) — the .ip field is read inside.
+#   Leaving the selection on the workspace yields an empty .ip; ACTIVATE then
+#   runs the steps on the user workspace (the default, no-ssh behavior).
+#
+#   Bucket mode works on any resource: the PW CLI is automatically authenticated
+#   in the run environment (like GITHUB_TOKEN on a GitHub runner), so
+#   `pw buckets get-token` succeeds whether the loop runs on the workspace or on
+#   a compute cluster. No extra credential setup is needed beyond the
+#   `permissions: ["*"]` already set at the top of this file.
+#
+# PATTERN B — Filesystem destination on a remote resource.
+#   Syncing between paths on a compute cluster is exactly what the `cluster`
+#   input now handles directly — just select it in the form:
+#
+#     with:
+#       source_dir: /scratch/job/outputs/
+#       destination: /home/user/persistent/outputs/
+#       cluster: ${{ inputs.target_cluster }}
+#
+#   Bucket destinations work the same way with a cluster selected, since the PW
+#   CLI is authenticated on the cluster too.
+#
+# CHOOSING THE DESTINATION:
+#   * Filesystem path  -> "/home/user/dir" or "~/pw/persistent/out"  -> rsync
+#   * PW bucket        -> "pw://<user>/<bucket>[/path]"              -> aws s3 sync
+#   The branch is purely string-based on the "pw://" scheme prefix, so no extra
+#   flag is needed from the caller.
+# =============================================================================
+
